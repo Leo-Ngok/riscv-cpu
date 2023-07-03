@@ -1,4 +1,6 @@
 `default_nettype none
+`include "./counter.v"
+`include "../debouncer.v"
 
 module lab2_top (
     input wire clk_50M,     // 50MHz 时钟输入
@@ -83,7 +85,7 @@ module lab2_top (
   /* =========== Demo code begin =========== */
 
   // PLL 分频示例
-  logic locked, clk_10M, clk_20M;
+  wire locked, clk_10M, clk_20M;
   pll_example clock_gen (
       // Clock in ports
       .clk_in1(clk_50M),  // 外部时钟输入
@@ -96,7 +98,7 @@ module lab2_top (
                        // 后级电路复位信号应当由它生成（见下）
   );
 
-  logic reset_of_clk10M;
+  reg reset_of_clk10M;
   // 异步复位，同步释放，将 locked 信号转为后级电路的复位 reset_of_clk10M
   always_ff @(posedge clk_10M or negedge locked) begin
     if (~locked) reset_of_clk10M <= 1'b1;
@@ -106,11 +108,11 @@ module lab2_top (
   /* =========== Demo code end =========== */
 
   // 内部信号声明
-  logic trigger;
-  logic [3:0] count;
+  wire trigger;
+  wire [3:0] count;
 
   // 计数器模块
-  // TODO: 在 lab2 目录中新建 counter.sv，实现该模块
+  // TO-DO: 在 lab2 目录中新建 counter.sv，实现该模块
   counter u_counter (
       .clk    (clk_10M),
       .reset  (reset_of_clk10M),
@@ -119,9 +121,17 @@ module lab2_top (
   );
 
   // 按键检测模块，在按键上升沿（按下）后输出高电平脉冲
-  // TODO: 同上，实现 trigger 模块，并例化
-
+  // TO-DO: 同上，实现 trigger 模块，并例化
+  debouncer deb (
+    clk_10M, 
+    reset_of_clk10M, 
+    push_btn,
+    trigger
+  );
   // 低位数码管译码器
-  // TODO: 例化模板中的 SEG7_LUT 模块
-
+  // TO-DO: 例化模板中的 SEG7_LUT 模块
+  SEG7_LUT seg (
+      .oSEG1(dpy0),
+      .iDIG (count)
+  );
 endmodule

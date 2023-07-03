@@ -48,12 +48,17 @@ module lab3_tb;
     touch_btn = 0;
     reset_btn = 0;
     push_btn = 0;
-
+    is_load = 0;
+    is_store = 0;
+    is_unknown = 0;
+    rs1 = 0;
+    rs2 = 0;
+    rd = 0;
     #100;
     reset_btn = 1;
     #100;
     reset_btn = 0;
-    #1000;  // 等待复位结束
+    /*#1000;  // 等待复位结束
 
     // 样例：使用 POKE 指令为寄存器赋随机初值
     for (int i = 1; i < 32; i = i + 1) begin
@@ -68,9 +73,58 @@ module lab3_tb;
       #1000;
     end
 
-    // TODO: 随机测试各种指令
+    // TO-DO: 随机测试各种指令
+     #100*/
+    // TO-DO: 随机测试各种指令
+    // 514 + 114 = 628
+    #2000
+    rd = 5'd3;
+    imm = 16'd456;
+    is_rtype = 0;
+    is_itype = 1;
+    opcode = 4'd1;
+    dip_sw = `inst_poke(rd, imm);
+    $display("dip_sw = 0x%0h", dip_sw);
+    push_btn = 1;
+    #100
+    push_btn = 0;
+    #1000
+    rd = 5'd4;
+    imm = 16'd123;
+    is_rtype = 0;
+    is_itype = 1;
+    dip_sw = `inst_poke(rd, imm);
+    $display("dip_sw = 0x%0h", dip_sw);
+    push_btn = 1;
+    #100
+    push_btn = 0;
+    #1000
+    rd = 5'd5;
 
-    #10000 $finish;
+    imm = 16'd514;
+    is_rtype = 1;
+    is_itype = 0;
+    rs1 = 5'd3;
+    rs2 = 5'd4;
+    rd = 5'd5;
+    opcode = ADD;
+    dip_sw = `inst_rtype(rd, rs1, rs2, opcode);
+    $display("dip_sw = 0x%0h", dip_sw);
+    push_btn = 1;
+    #100
+    push_btn = 0;
+    #1000
+    imm = 16'd0;
+    is_rtype = 0;
+    is_itype = 1;
+    rd = 5'd5;
+    opcode = 4'd2;
+    dip_sw = `inst_peek(rd, imm);
+    $display("dip_sw = 0x%0h", dip_sw);
+    push_btn = 1;
+    #100
+    push_btn = 0;
+    #1000 $finish;
   end
 
   // 待测试用户设计

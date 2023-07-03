@@ -1,5 +1,8 @@
 `default_nettype none
-
+`include "./int_controller.v"
+`include "../reg_file.sv"    
+`include "../alu.sv"
+`include "../debouncer.v"
 module lab3_top (
     input wire clk_50M,     // 50MHz 时钟输入
     input wire clk_11M0592, // 11.0592MHz 时钟输入（备用，可不用）
@@ -105,9 +108,78 @@ module lab3_top (
 
   /* =========== Demo code end =========== */
 
-  // TODO: 内部信号声明
+  // TO-DO: 内部信号声明
+  parameter ADDR_WIDTH = 5;
+  parameter DATA_WIDTH = 16;
+  wire [ADDR_WIDTH - 1 : 0] rf_raddr1;
+  wire [DATA_WIDTH - 1 : 0] rf_rdata1;
 
-  // TODO: 实验模块例化
+  wire [ADDR_WIDTH - 1 : 0] rf_raddr2;
+  wire [DATA_WIDTH - 1 : 0] rf_rdata2;
 
+  wire rf_we;
+  wire [ADDR_WIDTH - 1 : 0] rf_waddr;
+  wire [DATA_WIDTH - 1 : 0] rf_wdata;
+
+  wire [3:0] alu_opcode;
+  wire [DATA_WIDTH - 1 : 0] alu_in1;
+  wire [DATA_WIDTH - 1 : 0] alu_in2;
+  wire [DATA_WIDTH - 1 : 0] alu_out;
+
+  wire step;
+  // TOD-O: 实验模块例化
+
+  debouncer deb(
+    .CLOCK(clk_10M), 
+    .RESET(reset_of_clk10M), 
+    .PUSH_I(push_btn), 
+    .PULSE_OUT(step)
+  );
+
+  register_file rf(
+    .clock(clk_10M),
+    .reset(reset_of_clk10M),
+
+    .read_addr1(rf_raddr1),
+    .read_data1(rf_rdata1),
+
+    .read_addr2(rf_raddr2),
+    .read_data2(rf_rdata2),
+
+    .we(rf_we),
+    .write_addr(rf_waddr),
+    .write_data(rf_wdata)
+  );
+
+  alu __alu(
+    .opcode(alu_opcode),
+    .op_a(alu_in1),
+    .op_b(alu_in2),
+    .op_f(alu_out)
+  );
+
+  controller __cont(
+    .clk(clk_10M),
+    .reset(reset_of_clk10M),
+
+    .rf_raddr_a(rf_raddr1),
+    .rf_rdata_a(rf_rdata1),
+
+    .rf_raddr_b(rf_raddr2),
+    .rf_rdata_b(rf_rdata2),
+
+    .rf_we(rf_we),
+    .rf_waddr(rf_waddr),
+    .rf_wdata(rf_wdata),
+
+    .alu_a(alu_in1),
+    .alu_b(alu_in2),
+    .alu_op(alu_opcode),
+    .alu_y(alu_out),
+
+    .step(step),
+    .dip_sw(dip_sw),
+    .leds(leds)
+  );
 
 endmodule
