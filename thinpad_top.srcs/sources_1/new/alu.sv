@@ -14,9 +14,9 @@ module alu(opcode, op_a, op_b, op_f);
     parameter  OR = 4'd4;
     parameter XOR = 4'd5;
     parameter NOT = 4'd6;
-    parameter SAL = 4'd7;
-    parameter SAR = 4'd8;
-    parameter SHR = 4'd9;
+    parameter SHL = 4'd7;
+    parameter SHR = 4'd8;
+    parameter SAR = 4'd9;
     parameter ROL = 4'd10;
 
     always_comb begin
@@ -27,10 +27,10 @@ module alu(opcode, op_a, op_b, op_f);
          OR: op_f = op_a  |  op_b;
         XOR: op_f = op_a  ^  op_b;
         NOT: op_f =       ~  op_a;
-        SAL: op_f = op_a <<  op_b;
-        SAR: op_f = op_a >>  op_b;
-        SHR: op_f = op_a >>> op_b;
-        ROL: op_f = (op_a << op_b) | (op_a >> (WIDTH - op_b));
+        SHL: op_f = op_a <<  (op_b[3:0]);
+        SHR: op_f = op_a >>  (op_b[3:0]);
+        SAR: op_f = $signed(op_a) >>> (op_b[3:0]);
+        ROL: op_f = (op_a << (op_b[3:0])) | (op_a >> (WIDTH - (op_b[3:0])));
         default: op_f = 4'd0;
         endcase
     end

@@ -79,7 +79,7 @@ module lab3_tb;
     // 514 + 114 = 628
     #2000
     rd = 5'd3;
-    imm = 16'd456;
+    imm = 16'h634c;
     is_rtype = 0;
     is_itype = 1;
     opcode = 4'd1;
@@ -90,7 +90,7 @@ module lab3_tb;
     push_btn = 0;
     #1000
     rd = 5'd4;
-    imm = 16'd123;
+    imm = 16'hcb11;
     is_rtype = 0;
     is_itype = 1;
     dip_sw = `inst_poke(rd, imm);
@@ -100,14 +100,13 @@ module lab3_tb;
     push_btn = 0;
     #1000
     rd = 5'd5;
-
-    imm = 16'd514;
+    imm = 0;
     is_rtype = 1;
     is_itype = 0;
     rs1 = 5'd3;
     rs2 = 5'd4;
     rd = 5'd5;
-    opcode = ADD;
+    opcode = ROL;
     dip_sw = `inst_rtype(rd, rs1, rs2, opcode);
     $display("dip_sw = 0x%0h", dip_sw);
     push_btn = 1;

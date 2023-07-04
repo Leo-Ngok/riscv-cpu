@@ -10,11 +10,17 @@ module alu_tb;
     wire [15:0] alu_out;
 
     initial begin
-        alu_in1 = 16'd456;
-        alu_in2 = 16'd123;
-        opcode = 4'd1;
+        alu_in1 = 16'h634c;
+        alu_in2 = 16'hcb11;
+        opcode = 4'd10;
         # 1000
-        opcode = 4'd2;
+        alu_in1 = 16'h634c;
+        alu_in2 = 16'hb982;
+        opcode = 4'd8;
+        # 1000
+        alu_in1 = 16'hbab3;
+        alu_in2 = 16'h30f5;
+        opcode = 4'd9;
         # 2000
         $finish;
     end

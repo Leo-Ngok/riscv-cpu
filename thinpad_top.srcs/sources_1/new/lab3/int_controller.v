@@ -155,8 +155,10 @@ module controller(
           rf_waddr <= rd;
           if(is_itype) begin
             rf_wdata <= imm;
+            leds <= imm;
           end else if(is_rtype) begin
             rf_wdata <= alu_y;
+            leds <= alu_y;
           end
           //rf_wdata <= alu_y;
         end
