@@ -103,11 +103,11 @@ reg RxD_endofpacket; // asserted for one clock cycle when a packet has been dete
 
 reg [3:0] RxD_state = 0;
 
-`ifdef SIMULATION
+`ifdef SIMULATION // -------------------------------------------------------
 wire RxD_bit = RxD;
 wire sampleNow = 1'b1;  // receive one bit per clock cycle
 
-`else
+`else // -------------------------------------------------------
 wire OversamplingTick;
 BaudTickGen #(ClkFrequency, Baud, Oversampling) tickgen(.clk(clk), .enable(1'b1), .tick(OversamplingTick));
 
@@ -137,7 +137,7 @@ localparam l2o = log2(Oversampling);
 reg [l2o-2:0] OversamplingCnt = 0;
 always @(posedge clk) if(OversamplingTick) OversamplingCnt <= (RxD_state==0) ? 1'd0 : OversamplingCnt + 1'd1;
 wire sampleNow = OversamplingTick && (OversamplingCnt==Oversampling/2-1);
-`endif
+`endif // -------------------------------------------------------
 
 // now we can accumulate the RxD bits in a shift-register
 always @(posedge clk)

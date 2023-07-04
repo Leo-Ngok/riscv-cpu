@@ -52,11 +52,14 @@ module uart_controller #(
       .ClkFrequency(CLK_FREQ),
       .Baud        (BAUD)
   ) u_async_receiver (
-      .clk           (clk_i),
-      .RxD           (uart_rxd_i),
-      .RxD_data_ready(rxd_data_ready),
-      .RxD_clear     (rxd_clear),
-      .RxD_data      (rxd_data)
+      // None of our business
+      .clk           (clk_i),           // Input
+      .RxD           (uart_rxd_i),      // Input  (elsewhere)
+      
+      // Focus on port below.
+      .RxD_data_ready(rxd_data_ready),  // Output (has received data)
+      .RxD_clear     (rxd_clear),       // Input  (Empty the buffer)
+      .RxD_data      (rxd_data)         // Output [7:0]
   );
 
   /*-- internal registers --*/
