@@ -25,9 +25,9 @@ module register_file(clock, reset,
 
     always @(*) begin
         if(reset == 1'b1) begin
-            read_data1 = 16'b0;
+            read_data1 = {WIDTH{1'b0}};
         end else if(read_addr1 == 5'b0) begin
-            read_data1 = 16'b0; // x0 is always zero.
+            read_data1 = {WIDTH{1'b0}}; // x0 is always zero.
         end else begin
             read_data1 = registers[read_addr1];
         end
@@ -35,9 +35,9 @@ module register_file(clock, reset,
 
     always @(*) begin
         if(reset == 1'b1) begin
-            read_data2 <= 16'b0;
+            read_data2 <= {WIDTH{1'b0}};
         end else if(read_addr2 == 5'b0) begin
-            read_data2 = 16'b0; // x0 is always zero.
+            read_data2 = {WIDTH{1'b0}}; // x0 is always zero.
         end else begin
             read_data2 = registers[read_addr2];
         end
@@ -51,7 +51,7 @@ module register_file(clock, reset,
         end else begin
             int i;
             for(i = 0; i < 32; ++i) begin
-                registers[i] <= 0;
+                registers[i] <= {WIDTH{1'b0}};
             end
         end
     end 

@@ -6,7 +6,7 @@ module counter(
     input  wire trigger,
     output reg [3:0] count
     );
-    always @( posedge clk or negedge reset ) begin
+    always @( posedge clk or posedge reset ) begin
         if(reset) begin
             count <= 4'd0;
         end else begin

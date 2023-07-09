@@ -82,7 +82,8 @@ module sram_controller #(
           sram_ce_n <= 1;
           sram_oe_n <= 1;
           sram_be_n <= 4'b1111;
-          wb_dat_o <= 32'd0;
+          state_curr <= SRAM_IDLE;
+          //wb_dat_o <= 32'd0;
         end
         sram_we_n <= 1;
 
@@ -90,12 +91,13 @@ module sram_controller #(
       /* Part I: Read logic. */
       SRAM_READ_OP: begin
         state_curr <= SRAM_READ_RESOL;
-      end
-      SRAM_READ_RESOL: begin
         sram_oe_n <= 1;
         sram_ce_n <= 1;
         wb_ack_o <= 1;
         wb_dat_o <= sram_data;
+      end
+      SRAM_READ_RESOL: begin
+        wb_ack_o <= 0;
         state_curr <= SRAM_REVERT;
       end
       SRAM_REVERT: begin

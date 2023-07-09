@@ -1,5 +1,5 @@
 `timescale 1ns / 1ps
-`include "../../../sources_1/new/alu.sv"
+`include "../../../sources_1/new/lab3/alu.sv"
 module alu_tb;
   wire clk_50M, clk_11M0592;
     //wire clk_11M0592;

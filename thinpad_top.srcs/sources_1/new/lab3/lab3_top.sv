@@ -1,8 +1,8 @@
 `default_nettype none
 `include "./int_controller.v"
-`include "../reg_file.sv"    
-`include "../alu.sv"
-`include "../debouncer.v"
+`include "./reg_file.sv"    
+`include "./alu.sv"
+`include "./debouncer.v"
 module lab3_top (
     input wire clk_50M,     // 50MHz 时钟输入
     input wire clk_11M0592, // 11.0592MHz 时钟输入（备用，可不用）
