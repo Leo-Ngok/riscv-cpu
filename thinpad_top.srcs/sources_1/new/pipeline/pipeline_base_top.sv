@@ -1,12 +1,11 @@
 `default_nettype none
-`include "./dau.sv"
-`include "./cu_fast.sv"
-`include "./cu.sv"
+`include "../stage_6/dau.sv"
+`include "pipeline_cu.sv"
 `include "../reg_file.sv"
 `include "../riscv_alu.sv"
 `include "../debouncer.v"
 
-module stage_6_top (
+module pipeline_top (
     input wire clk_50M,     // 50MHz 时钟输入
     input wire clk_11M0592, // 11.0592MHz 时钟输入（备用，可不用）
 
@@ -210,8 +209,8 @@ module stage_6_top (
     .PULSE_OUT(step)
   );
 
-  cu control_unit(
-    .clk(clk_10M),
+  pipeline_cu control_unit(
+    .clk(clk_10M /*step*/),
     .rst(reset_of_clk10M),
     
     .dau_we_o(dau_we),

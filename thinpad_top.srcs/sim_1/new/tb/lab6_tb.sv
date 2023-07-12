@@ -143,7 +143,7 @@ module lab6_tb;
   end
 
   // 待测试用户设计
-  stage_6_top dut (
+  pipeline_top dut (
       .clk_50M(clk_50M),
       .clk_11M0592(clk_11M0592),
       .push_btn(push_btn),

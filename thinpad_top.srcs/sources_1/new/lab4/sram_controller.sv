@@ -90,16 +90,16 @@ module sram_controller #(
       end
       /* Part I: Read logic. */
       SRAM_READ_OP: begin
-        state_curr <= SRAM_READ_RESOL;
+        state_curr <= SRAM_REVERT; // SRAM_READ_RESOL;
         sram_oe_n <= 1;
         sram_ce_n <= 1;
         wb_ack_o <= 1;
         wb_dat_o <= sram_data;
       end
-      SRAM_READ_RESOL: begin
+      /*SRAM_READ_RESOL: begin
         wb_ack_o <= 0;
         state_curr <= SRAM_REVERT;
-      end
+      end*/
       SRAM_REVERT: begin
         wb_ack_o <= 0;
         state_curr <= SRAM_IDLE;

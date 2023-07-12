@@ -125,7 +125,7 @@ module dau_master #(
                     ack_o <= 1'b0;
                 end 
             // PART II: UART ACTIONS
-                READ_UART_WAIT_ACTION: begin            
+                /*READ_UART_WAIT_ACTION: begin            
                     state_curr <= READ_UART_WAIT_CHECK;
                     wb_cyc_o <= 1'b1;
                     wb_stb_o <= 1'b1;
@@ -195,7 +195,7 @@ module dau_master #(
                     wb_stb_o <= 1'b0;
                     wb_we_o <= 1'b0;
                     state_curr <= WAIT;
-                end
+                end*/
                 default: begin
                     state_curr <= WAIT;
                 end

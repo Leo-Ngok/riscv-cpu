@@ -1,7 +1,8 @@
 `include "dau_master.sv"
 `include "../lab4/sram_controller.sv"
+`include "sram_controller_fast.sv"
 `include "../lab5/uart_controller.sv"
-
+`include "dau_master_comb.sv"
 module dau (
     input wire sys_clk,
     input wire sys_rst,
@@ -46,11 +47,11 @@ module dau (
     logic [31:0] wbm_dat_i;
     logic [ 3:0] wbm_sel_o;
     logic        wbm_we_o;
-
-    dau_master #(
+    // dau_master
+    dau_master_comb #(
         .ADDR_WIDTH(32),
         .DATA_WIDTH(32)
-    ) u_lab5_master (
+    ) u_lab6_master (
         .clk_i(sys_clk),
         .rst_i(sys_rst),
         // Interface to control unit
@@ -171,7 +172,7 @@ module dau (
     /* =========== Lab5 MUX end =========== */
 
     /* =========== Lab5 Slaves begin =========== */
-    sram_controller #(
+    sram_controller_fast #(
         .SRAM_ADDR_WIDTH(20),
         .SRAM_DATA_WIDTH(32)
     ) sram_controller_base (
@@ -197,7 +198,7 @@ module dau (
         .sram_be_n(base_ram_be_n)
     );
 
-    sram_controller #(
+    sram_controller_fast #(
         .SRAM_ADDR_WIDTH(20),
         .SRAM_DATA_WIDTH(32)
     ) sram_controller_ext (
