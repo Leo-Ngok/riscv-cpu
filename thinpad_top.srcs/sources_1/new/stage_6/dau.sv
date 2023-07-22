@@ -1,42 +1,38 @@
-`include "dau_master.sv"
-`include "../lab4/sram_controller.sv"
-`include "sram_controller_fast.sv"
-`include "../lab5/uart_controller.sv"
-`include "dau_master_comb.sv"
+
 module dau (
     input wire sys_clk,
     input wire sys_rst,
 
     // Interface to Control Unit
-    input wire we_i,
-    input wire re_i,
-    input wire [31:0] addr_i,
-    input wire [3:0] byte_en,
-    input wire [31:0] data_i,
+    input  wire we_i,
+    input  wire re_i,
+    input  wire [31:0] addr_i,
+    input  wire [ 3:0] byte_en,
+    input  wire [31:0] data_i,
     output wire [31:0] data_o,
     output wire ack_o,
 
     // Interface to External device
     
     // UART
-    input wire rxd,
+    input  wire rxd,
     output wire txd,
 
     // BaseRAM
-    inout wire [31:0] base_ram_data,  // BaseRAM 数据，低 8 位与 CPLD 串口控制器共享
+    inout  wire [31:0] base_ram_data,  // BaseRAM 数据，低 8 位与 CPLD 串口控制器共享
     output wire [19:0] base_ram_addr,  // BaseRAM 地址
-    output wire [3:0] base_ram_be_n,  // BaseRAM 字节使能，低有效。如果不使用字节使能，请保持为 0
-    output wire base_ram_ce_n,  // BaseRAM 片选，低有效
-    output wire base_ram_oe_n,  // BaseRAM 读使能，低有效
-    output wire base_ram_we_n,  // BaseRAM 写使能，低有效
+    output wire [ 3:0] base_ram_be_n,  // BaseRAM 字节使能，低有效。如果不使用字节使能，请保持为 0
+    output wire        base_ram_ce_n,  // BaseRAM 片选，低有效
+    output wire        base_ram_oe_n,  // BaseRAM 读使能，低有效
+    output wire        base_ram_we_n,  // BaseRAM 写使能，低有效
 
     // ExtRAM
-    inout wire [31:0] ext_ram_data,  // ExtRAM 数据
+    inout  wire [31:0] ext_ram_data,  // ExtRAM 数据
     output wire [19:0] ext_ram_addr,  // ExtRAM 地址
-    output wire [3:0] ext_ram_be_n,  // ExtRAM 字节使能，低有效。如果不使用字节使能，请保持为 0
-    output wire ext_ram_ce_n,  // ExtRAM 片选，低有效
-    output wire ext_ram_oe_n,  // ExtRAM 读使能，低有效
-    output wire ext_ram_we_n  // ExtRAM 写使能，低有效
+    output wire [ 3:0] ext_ram_be_n,  // ExtRAM 字节使能，低有效。如果不使用字节使能，请保持为 0
+    output wire        ext_ram_ce_n,  // ExtRAM 片选，低有效
+    output wire        ext_ram_oe_n,  // ExtRAM 读使能，低有效
+    output wire        ext_ram_we_n  // ExtRAM 写使能，低有效
 );
 
     logic        wbm_cyc_o;

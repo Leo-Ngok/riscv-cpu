@@ -23,7 +23,7 @@ module sram_controller_fast #(
     input wire wb_we_i,
 
     // sram interface
-    output reg [SRAM_ADDR_WIDTH-1:0] sram_addr,
+    output wire [SRAM_ADDR_WIDTH-1:0] sram_addr,
     inout wire [SRAM_DATA_WIDTH-1:0] sram_data,
     output reg sram_ce_n,
     output reg sram_oe_n,
@@ -47,7 +47,6 @@ module sram_controller_fast #(
   
   sram_state_t state_curr;
   reg [31:0] sram_output_buf;
-
   always_ff @(posedge clk_i or posedge rst_i)
   begin
     if(rst_i) begin
@@ -58,53 +57,55 @@ module sram_controller_fast #(
       sram_oe_n <= 1'b1;
       sram_we_n <= 1'b1;
       sram_be_n <= 4'b1111;
-      sram_addr <= 0;
       
     end else begin
       case(state_curr)
       SRAM_IDLE: begin
         if(wb_cyc_i && wb_stb_i) begin
-          sram_addr <= wb_adr_i[21:2];
           sram_ce_n <= 0;
           sram_be_n <= ~wb_sel_i;
           if(wb_we_i) begin // write
             sram_oe_n <= 1;
-            sram_we_n <= 1'b0;
             sram_output_buf <= wb_dat_i;
-            state_curr <= SRAM_REVERT;
-            wb_ack_o <= 1'b1;
+            state_curr <= SRAM_WRITE_OP;
+            sram_we_n <= 1'b0;
           end else begin // read
-            sram_oe_n <= 0;
-            sram_we_n <= 1;
-            state_curr <= SRAM_REVERT;
+            sram_oe_n <= 1'b0;
+            state_curr <= SRAM_READ_OP;
             wb_ack_o <= 1'b1;
+            sram_we_n <= 1'b1;
           end
         end else begin
-          sram_addr <= 0;
-          sram_ce_n <= 1;
-          sram_oe_n <= 1;
+          sram_ce_n <= 1'b1;
+          sram_oe_n <= 1'b1;
           sram_be_n <= 4'b1111;
           state_curr <= SRAM_IDLE;
           sram_we_n <= 1'b1;
-          //wb_dat_o <= 32'd0;
         end
+
       end
-      SRAM_REVERT: begin
-        wb_ack_o <= 0;
-        sram_oe_n <= 1;
-        sram_ce_n <= 1;
-        sram_we_n <= 1;
-        sram_be_n <= 4'b1111;
-        sram_addr <= 20'b0;
-        sram_output_buf <= 32'b0;
-        state_curr <= SRAM_IDLE;
+      /* Part I: Read logic. */
+      SRAM_READ_OP: begin
+        state_curr <= SRAM_IDLE; // SRAM_READ_RESOL;
+        sram_oe_n <= 1'b1;
+        sram_ce_n <= 1'b1;
+        wb_ack_o <= 1'b0;
       end
       /* Part II: Write Logic. */
+      SRAM_WRITE_PREP: begin
+        sram_we_n <= 1'b0;
+        state_curr <= SRAM_WRITE_OP;
+      end
       SRAM_WRITE_OP: begin
         sram_we_n <= 1'b1;
-        sram_ce_n <= 1'b1;
+        state_curr <= SRAM_WRITE_RESOL;
         wb_ack_o <= 1'b1;
-        state_curr <= SRAM_REVERT;
+      end
+      SRAM_WRITE_RESOL: begin
+        wb_ack_o <= 1'b0;
+        sram_ce_n <= 1'b1;
+        sram_output_buf <= 32'b0;
+        state_curr <= SRAM_IDLE;
       end
       /* Part III: Fail case */
       default: begin
@@ -113,7 +114,7 @@ module sram_controller_fast #(
       endcase
     end
   end
-
+  assign sram_addr = wb_adr_i[21:2];
   assign sram_data = (!sram_we_n) ? sram_output_buf : 32'bz;
-  assign wb_dat_o = wb_ack_o ? sram_data : 32'b0;
+  assign wb_dat_o = (!wb_we_i && wb_ack_o) ? sram_data : 32'b0;
 endmodule

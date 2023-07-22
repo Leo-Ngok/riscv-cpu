@@ -1,6 +1,3 @@
-`include "pipeline_regs.sv"
-`include "instr_decode.sv"
-`include "instr_fetch.sv"
 module pipeline_cu (
     input wire clk,
     input wire rst,
@@ -35,9 +32,11 @@ module pipeline_cu (
     input wire step,
     input wire [31:0] dip_sw
 );
+    
+    wire instr_ack;
     // Pause when DAU data out is not ready.
     // TODO: [Extend by implementing central pipeline control unit]
-    wire if_invalid = ~dau_ack_i;
+    wire if_invalid = ~instr_ack; //~dau_ack_i;
     wire [31:0] next_instr_ptr;
     wire [31:0] curr_instr_ptr;
     // Pre IF registers, i.e. the instruction pointer
@@ -60,6 +59,12 @@ module pipeline_cu (
     //    if HALT is read, then freeze IP.
 
     // Step IF-1: Fetch instruction from DAU.
+
+    // Note that now we test for functionalities of 
+    // 5 staged processor and pretends there to be
+    // an instruction cache.
+
+    /* It is now stage of device access to interact with DAU. 
     wire        dau_re = 1'b1;
     wire        dau_we = 1'b0;
     wire [31:0] dau_data_write = 32'b0;
@@ -70,12 +75,28 @@ module pipeline_cu (
     assign dau_addr_o  = curr_instr_ptr;
     assign dau_byte_en = dau_be;
     assign dau_data_o  = 32'b0; 
+    */
+    wire [31:0] instr_fetched;
+    instr_cache_fake test_instr(
+        .sys_clk(clk),
+        .sys_rst(rst),
+
+        .we_i(1'b0),
+        .re_i(1'b1),
+        .byte_en(4'b1111),
+
+        .addr_i(curr_instr_ptr),
+        .data_i(32'b0),
+        .data_o(instr_fetched),
+
+        .ack_o(instr_ack)
+    );
 
     // Step IF-2: Predict the next instruction pointer.
     next_instr_ptr comb_nxt_ip(
-        .mem_ack(dau_ack_i),
+        .mem_ack(/*dau_ack_i*/ instr_ack), // TODO: Change it back for external memory interaction.
         .curr_ip(curr_instr_ptr),
-        .curr_instr(dau_data_i),
+        .curr_instr(/*dau_data_i*/ instr_fetched),
         .next_ip_pred(next_instr_ptr)
     );
 
@@ -87,9 +108,9 @@ module pipeline_cu (
 
         .stall(1'b0), // TODO: No, do this when you impl mem access stage
         .bubble(if_invalid), // ==============================================================
-        //.error(1'bz), 
+        .error(), 
 
-        .if_instr(dau_data_i),
+        .if_instr(/*dau_data_i*/ instr_fetched),
         .id_instr(id_instr)
     );
 
@@ -104,14 +125,17 @@ module pipeline_cu (
 
     // Step ID-1: prepare address for reg files.
     wire [4:0] id_raddr1, id_raddr2, id_waddr;
-    wire id_we;
+    wire id_we, id_mre, id_mwe;
 
     instr_decoder comb_instr_decoder(
         .instr(id_instr),
         .raddr1(id_raddr1),
         .raddr2(id_raddr2),
         .waddr(id_waddr),
-        .we(id_we)  
+        .we(id_we),
+
+        .mem_re(id_mre),
+        .mem_we(id_mwe)  
     );
     
     // Step ID-2: Interact with external register files
@@ -124,9 +148,9 @@ module pipeline_cu (
     wire [ 4:0] alu_waddr;
     wire [31:0] alu_wdata;
 
-    wire        mem_we    = 1'b0; // TODO: Erase these assignments when MEM stage is implemented.
-    wire [ 4:0] mem_waddr = 5'b0;
-    wire [31:0] mem_wdata = 32'b0;
+    wire        mem_we; // TODO: Erase these assignments when MEM stage is implemented.
+    wire [ 4:0] mem_waddr;
+    wire [31:0] mem_wdata;
 
     wire        wb_we;
     wire [ 4:0] wb_waddr;
@@ -159,21 +183,18 @@ module pipeline_cu (
     );
 
     wire [31:0] ex_instr;
-    
+
+    wire alu_mre, alu_mwe;
+    wire [31:0] alu_mdata_in;
     id_ex ppl_id_ex(
         .clock(clk),
         .reset(rst),
 
         .stall(1'b0), // TODO: Add stall when implementing memory access stage
         .bubble(1'b0),// ==============================================================
-        //.error(1'bz),
-
-        .id_we(id_we),
-        .ex_we(alu_we),
-
-        .id_wraddr(id_waddr),
-        .ex_wraddr(alu_waddr),
-
+        .error(),
+        
+        // Prepare for what ALU need.
         .id_op1(id_rdata1_to_alu),
         .id_op2(id_rdata2_to_alu),
 
@@ -181,20 +202,133 @@ module pipeline_cu (
         .ex_op2(alu_in2),
 
         .id_instr(id_instr),
-        .ex_instr(ex_instr)
+        .ex_instr(ex_instr),
+        
+        // TODO: Prepare metadata for device access stage
+        .id_mre(id_mre),
+        .ex_mre(alu_mre),
+
+        .id_mwe(id_mwe),
+        .ex_mwe(alu_mwe),
+
+        .id_mdata(id_rdata2_to_alu), // Note that this bus is used only in STORE instructions.
+        .ex_mdata(alu_mdata_in),
+
+        // Metadata for write back stage.
+        .id_we(id_we),
+        .ex_we(alu_we),
+
+        .id_wraddr(id_waddr),
+        .ex_wraddr(alu_waddr)
     );
 
-    // Execution: Just connect the wires to/from ALU.
+    // Execution: 
+    // 1. Connect the wires to/from ALU.
+    // 2. Adjust offset for write instructions.
+
+    // EX-1. Access to ALU.
     assign alu_opcode = ex_instr;
     assign alu_wdata = alu_out;
 
-    ex_wb ppl_ex_wb(
+    // EX-2. Adjust offset
+    wire [31:0] alu_mdata_out;
+    wire [ 3:0] alu_mbe_out;
+    mem_data_offset_adjust comb_off_adj(
+        .mem_we(alu_mwe),
+        .write_address(alu_out),
+        .instr(ex_instr),
+        .in_data(alu_mdata_in),
+        .out_data(alu_mdata_out),
+        .out_be(alu_mbe_out)
+    );
+
+    // TODO: Device access.
+    wire        mem_mre;
+    wire        mem_mwe;
+    wire [ 3:0] mem_mbe;
+    wire [31:0] mem_maddr;
+    wire [31:0] mem_mdata_write;
+    wire [31:0] mem_instr;
+    ex_mem ppl_ex_mem(
         .clock(clk),
         .reset(rst),
 
         .stall(1'b0),
         .bubble(1'b0),
-        //.error(1'bz),
+        .error(),
+        
+        // TODO: Add memory access signals input.
+        .ex_mre(alu_mre),
+        .mem_mre(mem_mre),
+
+        .ex_mwe(alu_mwe),
+        .mem_mwe(mem_mbe),
+
+        .ex_mbe(alu_mbe_out),
+        .mem_mbe(mem_mbe),
+
+        .ex_maddr(alu_out), // we always calculate sum of base and offset for mem address
+        .mem_maddr(mem_mdata_write),
+
+        .ex_mdata(alu_mdata_out),
+        .mem_mdata(mem_mdata_write),
+
+        // Metadata for next stage.
+        .ex_we (alu_we),
+        .mem_we(mem_we),
+
+        .ex_wraddr (alu_waddr),
+        .mem_wraddr(mem_waddr),
+
+        .ex_wdata (alu_wdata),
+        .mem_wdata(mem_wdata), // TODO: Modify this to support
+                               // memory write
+
+        .ex_instr (ex_instr),
+        .mem_instr(mem_instr)
+    );
+
+    // Device Access.
+    // What to do:
+    // 1. Prepare data for input interface of DAU.
+    // 2. Fetch data from DAU and adjust offset,
+    // 3. then choose between that and data from ALU
+    //    and write to write back pipeline registers.
+    
+    // Write back: store execution result to registers.
+
+    mem_wb ppl_mem_wb(
+        .clock(clk),
+        .reset(rst),
+
+        .stall(1'b0),
+        .bubble(1'b0),
+        .error(),
+
+        .mem_we(mem_we),
+        .wb_we (wb_we),
+
+        .mem_wraddr(mem_waddr),
+        .wb_wraddr (wb_waddr),
+
+        .mem_wdata(mem_wdata),
+        .wb_wdata (wb_wdata),
+
+        .mem_instr(mem_instr),
+        .wb_instr()
+    );
+    assign rf_we = wb_we;
+    assign rf_waddr = wb_waddr;
+    assign rf_wdata = wb_wdata;
+    
+
+    /*ex_wb ppl_ex_wb(
+        .clock(clk),
+        .reset(rst),
+
+        .stall(1'b0),
+        .bubble(1'b0),
+        .error(),
 
         .ex_we(alu_we),
         .wb_we(wb_we),
@@ -203,11 +337,9 @@ module pipeline_cu (
         .wb_wraddr(wb_waddr),
 
         .ex_wdata(alu_wdata),
-        .wb_wdata(wb_wdata)
-    );
+        .wb_wdata(wb_wdata),
 
-    assign rf_we = wb_we;
-    assign rf_waddr = wb_waddr;
-    assign rf_wdata = wb_wdata;
-
+        .ex_instr(ex_instr),
+        .wb_instr()
+    );*/
 endmodule

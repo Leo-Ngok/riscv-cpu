@@ -35,7 +35,7 @@ module register_file(clock, reset,
 
     always @(*) begin
         if(reset == 1'b1) begin
-            read_data2 <= {WIDTH{1'b0}};
+            read_data2 = {WIDTH{1'b0}};
         end else if(read_addr2 == 5'b0) begin
             read_data2 = {WIDTH{1'b0}}; // x0 is always zero.
         end else begin

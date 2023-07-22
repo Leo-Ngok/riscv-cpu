@@ -4,7 +4,12 @@ module instr_decoder(
     output wire [4:0] raddr1,
     output wire [4:0] raddr2,
     output wire [4:0] waddr,
-    output wire we
+    output wire we,
+
+    output wire mem_re,
+    output wire mem_we//,
+
+    // output wire [3:0] mem_be: No, don't dotthis. Find write address first.
 );
     parameter LUI    = 7'b0110111;
     parameter AUIPC  = 7'b0010111;
@@ -45,6 +50,9 @@ module instr_decoder(
     assign waddr  = write_en ? instr[11: 7] : 5'b0;
     assign raddr1 = read1_en ? instr[19:15] : 5'b0;
     assign raddr2 = read2_en ? instr[24:20] : 5'b0;
+
+    assign mem_re = opcode == LOAD;
+    assign mem_we = opcode == STORE;
 endmodule
 
 module instr_mux(

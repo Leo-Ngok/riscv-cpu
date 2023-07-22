@@ -1,9 +1,5 @@
 `default_nettype none
-`include "../stage_6/dau.sv"
-`include "pipeline_cu.sv"
-`include "../reg_file.sv"
-`include "../riscv_alu.sv"
-`include "../debouncer.v"
+
 
 module pipeline_top (
     input wire clk_50M,     // 50MHz 时钟输入
@@ -210,7 +206,7 @@ module pipeline_top (
   );
 
   pipeline_cu control_unit(
-    .clk(clk_10M /*step*/),
+    .clk(clk_10M),
     .rst(reset_of_clk10M),
     
     .dau_we_o(dau_we),
@@ -238,5 +234,5 @@ module pipeline_top (
 
     .step(step),
     .dip_sw(dip_sw)
-  );
+  ); 
 endmodule
