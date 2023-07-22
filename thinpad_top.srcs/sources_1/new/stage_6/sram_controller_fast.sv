@@ -13,22 +13,22 @@ module sram_controller_fast #(
     input wire rst_i,
 
     // wishbone slave interface
-    input wire wb_cyc_i,
-    input wire wb_stb_i,
-    output reg wb_ack_o,
-    input wire [ADDR_WIDTH-1:0] wb_adr_i,
-    input wire [DATA_WIDTH-1:0] wb_dat_i,
-    output wire [DATA_WIDTH-1:0] wb_dat_o,
-    input wire [DATA_WIDTH/8-1:0] wb_sel_i,
-    input wire wb_we_i,
+    input  wire                    wb_cyc_i,
+    input  wire                    wb_stb_i,
+    output reg                     wb_ack_o,
+    input  wire [ADDR_WIDTH-1:0]   wb_adr_i,
+    input  wire [DATA_WIDTH-1:0]   wb_dat_i,
+    output wire [DATA_WIDTH-1:0]   wb_dat_o,
+    input  wire [DATA_WIDTH/8-1:0] wb_sel_i,
+    input  wire                    wb_we_i,
 
     // sram interface
     output wire [SRAM_ADDR_WIDTH-1:0] sram_addr,
-    inout wire [SRAM_DATA_WIDTH-1:0] sram_data,
-    output reg sram_ce_n,
-    output reg sram_oe_n,
-    output reg sram_we_n,
-    output reg [SRAM_BYTES-1:0] sram_be_n
+    inout  wire [SRAM_DATA_WIDTH-1:0] sram_data,
+    output reg                        sram_ce_n,
+    output reg                        sram_oe_n,
+    output reg                        sram_we_n,
+    output wire [SRAM_BYTES-1:0]      sram_be_n
 );
 
   // TO-DO: 实现 SRAM 控制器
@@ -56,14 +56,14 @@ module sram_controller_fast #(
       sram_ce_n <= 1'b1;
       sram_oe_n <= 1'b1;
       sram_we_n <= 1'b1;
-      sram_be_n <= 4'b1111;
+      //sram_be_n <= 4'b1111;
       
     end else begin
       case(state_curr)
       SRAM_IDLE: begin
         if(wb_cyc_i && wb_stb_i) begin
           sram_ce_n <= 0;
-          sram_be_n <= ~wb_sel_i;
+          //sram_be_n <= ~wb_sel_i;
           if(wb_we_i) begin // write
             sram_oe_n <= 1;
             sram_output_buf <= wb_dat_i;
@@ -78,7 +78,7 @@ module sram_controller_fast #(
         end else begin
           sram_ce_n <= 1'b1;
           sram_oe_n <= 1'b1;
-          sram_be_n <= 4'b1111;
+          //sram_be_n <= 4'b1111;
           state_curr <= SRAM_IDLE;
           sram_we_n <= 1'b1;
         end
@@ -117,4 +117,5 @@ module sram_controller_fast #(
   assign sram_addr = wb_adr_i[21:2];
   assign sram_data = (!sram_we_n) ? sram_output_buf : 32'bz;
   assign wb_dat_o = (!wb_we_i && wb_ack_o) ? sram_data : 32'b0;
+  assign sram_be_n = ~wb_sel_i;
 endmodule

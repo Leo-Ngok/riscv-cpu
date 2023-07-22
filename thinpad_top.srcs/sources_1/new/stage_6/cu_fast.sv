@@ -3,10 +3,10 @@ module cu_fast (
     input wire rst,
     
     // Device access unit
-    output reg        dau_instr_re_o,
-    output reg [31:0] dau_instr_addr_o,
-    input wire [31:0] dau_instr_data_i,
-    input wire        dau_instr_ack_i,
+    output reg         dau_instr_re_o,
+    output wire [31:0] dau_instr_addr_o,
+    input wire  [31:0] dau_instr_data_i,
+    input wire         dau_instr_ack_i,
 
     output reg        dau_we_o,
     output reg        dau_re_o,
@@ -154,22 +154,27 @@ module cu_fast (
     parameter INSTR_BASE_ADDR = 32'h8000_0000;
 
     state_t state_curr;
+    // Pre - IF
     reg [31:0] instr_ptr;
+    // IF - ID
     reg [31:0] instr_reg;
+
+    // Cross ALU, MEM, WB
     reg [31:0] eval_data;
+    
+    // ALU - MEM
+    reg [31:0] alu_mem_data;
+    reg [31:0] alu_mem_addr;
+    // MEM - WB
+    reg [31:0] mem_wb_data;
+
     always_ff @(posedge clk or posedge rst) begin
         if(rst) begin
-
-            dau_instr_re_o <= 1'b0;
-            dau_instr_addr_o <= 32'b0;
-            
             dau_we_o <= 1'b0;
             dau_re_o <= 1'b0;
             dau_addr_o <= 32'b0;
             dau_data_o <= 32'b0;
             
-            rf_raddr1 <= 5'b0;
-            rf_raddr2 <= 5'b0;
             rf_waddr  <= 5'b0;
             rf_wdata  <= 32'b0;
             rf_we     <= 1'b0;
@@ -183,29 +188,24 @@ module cu_fast (
             instr_reg <= 32'b0;
             instr_ptr <= INSTR_BASE_ADDR;
             eval_data <= 32'b0;
+            alu_mem_data <= 32'b0;
+            alu_mem_addr <= 32'b0;
+
+            mem_wb_data <= 32'b0;
         end else begin
             case(state_curr)
             WAIT: begin
-                //if(step) begin
-                    state_curr <= INSTRUCTION_FETCH;
-                //end 
+                state_curr <= INSTRUCTION_FETCH;
                 rf_we <= 1'b0;
             end
             DONE: begin
                 rf_we <= 1'b0;
             end
             INSTRUCTION_FETCH: begin
-                /* First, implement the following before testing PC */
-                //state_curr <= INSTRUCTION_DECODE;
-                //instr_reg <= dip_sw;
-                /* Whenever you tested PC, use the impl below. */
                 if(dau_instr_ack_i) begin
                     state_curr <= INSTRUCTION_DECODE;
                     instr_reg <= dau_instr_data_i;
-                    dau_instr_re_o <= 1'b0;
                 end else begin
-                    dau_instr_re_o <= 1'b1;
-                    dau_instr_addr_o <= instr_ptr;
                     rf_we <= 1'b0;
                 end
             end
@@ -214,15 +214,13 @@ module cu_fast (
                     state_curr <= DONE;
                     instr_ptr <= INSTR_BASE_ADDR;
                 end else begin
-                    rf_raddr1 <= instr_reg[19:15];
-                    rf_raddr2 <= instr_reg[24:20];
+                    alu_in1 <= rf_rdata1;
+                    alu_in2 <= rf_rdata2;
+                    alu_opcode <= instr_reg;
                     state_curr <= EXECUTION;
                 end
             end
             EXECUTION:begin
-                alu_opcode <= instr_reg;
-                alu_in1 <= rf_rdata1;
-                alu_in2 <= rf_rdata2;
                 state_curr <= DEVICE_ACCESS;
             end
             DEVICE_ACCESS: begin
@@ -311,15 +309,27 @@ module cu_fast (
                     instr_ptr <= instr_ptr + 32'd4;
                 end
                 endcase
-                //state_curr <= WAIT;
                 if(instr_reg == 32'b0)
                     state_curr <= WAIT;
                 else
                     state_curr <= INSTRUCTION_FETCH;
-                    dau_instr_re_o <= 1'b1;
-                    dau_instr_addr_o <= instr_ptr;
             end
             endcase
         end
     end     
+    always_comb begin
+        dau_instr_re_o = 1'b0;
+        rf_raddr1 = 5'b0;
+        rf_raddr2 = 5'b0;
+        case(state_curr)
+        INSTRUCTION_FETCH: begin
+            dau_instr_re_o = 1'b1;
+        end
+        INSTRUCTION_DECODE: begin
+            rf_raddr1 = instr_reg[19:15];
+            rf_raddr2 = instr_reg[24:20];
+        end
+        endcase
+    end
+    assign dau_instr_addr_o = instr_ptr;
 endmodule
