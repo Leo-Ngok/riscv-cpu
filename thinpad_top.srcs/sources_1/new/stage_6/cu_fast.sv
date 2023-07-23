@@ -1,3 +1,4 @@
+//`include "../pipeline/instr_decode.sv"
 module cu_fast (
     input wire clk,
     input wire rst,
@@ -17,10 +18,10 @@ module cu_fast (
     input wire        dau_ack_i,
 
     // Register file
-    output reg [ 4:0] rf_raddr1,
+    output wire [ 4:0] rf_raddr1,
     input wire [31:0] rf_rdata1,
 
-    output reg [ 4:0] rf_raddr2,
+    output wire [ 4:0] rf_raddr2,
     input wire [31:0] rf_rdata2,
 
     output reg [ 4:0] rf_waddr,
@@ -38,15 +39,6 @@ module cu_fast (
     input wire [31:0] dip_sw
 );
 
-    /*parameter  LUI = 32'b????_????_????_????_????_????_?011_0111;
-    parameter  BEQ = 32'b????_????_????_????_?000_????_?110_0011;
-    parameter   LB = 32'b????_????_????_????_?000_????_?000_0011;
-    parameter   SB = 32'b????_????_????_????_?000_????_?010_0011;
-
-    parameter   SW = 32'b????_????_????_????_?010_????_?010_0011;
-    parameter ADDI = 32'b????_????_????_????_?000_????_?001_0011;
-    parameter ANDI = 32'b????_????_????_????_?111_????_?001_0011;
-    parameter  ADD = 32'b????_????_????_????_?000_????_?011_0011;*/
     // Miscellaneous
     parameter  LUI = 32'b????_????_????_????_????_????_?011_0111; // BASE
     // B-Type: Branch instructions.
@@ -156,58 +148,96 @@ module cu_fast (
     state_t state_curr;
     // Pre - IF
     reg [31:0] instr_ptr;
+    // IF
+    wire jump_pred;
+    wire [31:0] next_ip_pred;
     // IF - ID
+    reg [31:0] if_id_ip;
     reg [31:0] instr_reg;
+    // ID
+    wire [4:0] decoder_waddr;
+    wire decoder_we;
 
-    // Cross ALU, MEM, WB
-    reg [31:0] eval_data;
-    
+    wire decoder_mre;
+    wire decoder_mwe;
+    // ID - ALU
+    reg [31:0] id_alu_ip;
+    reg [31:0] id_alu_instr;
+
+    reg         id_alu_mwe;
+    reg         id_alu_mre;
+    reg [31:0]  id_alu_mwdata;
+
+    reg         id_alu_wbwe;
+    reg [ 4:0]  id_alu_wbaddr;
+    // ALU
+    wire [31:0] alu_mwdata_adjusted;
+    wire [ 3:0] alu_mbe_adjusted;
     // ALU - MEM
-    reg [31:0] alu_mem_data;
+    reg [31:0] alu_mem_instr;
+    reg        alu_mem_mwe;
+    reg        alu_mem_mre;
+    reg [ 3:0] alu_mem_mbe;
     reg [31:0] alu_mem_addr;
+    reg [31:0] alu_mem_data;
+
+    reg        alu_mem_wbwe;
+    reg [ 4:0] alu_mem_wbaddr;
+    reg [31:0] alu_mem_wbdata;
+    // MEM
+    wire [31:0] mem_mrdata_adjusted;
     // MEM - WB
+    reg mem_wb_we;
+    reg [ 4:0] mem_wb_addr;
     reg [31:0] mem_wb_data;
 
     always_ff @(posedge clk or posedge rst) begin
         if(rst) begin
-            dau_we_o <= 1'b0;
-            dau_re_o <= 1'b0;
-            dau_addr_o <= 32'b0;
-            dau_data_o <= 32'b0;
-            
-            rf_waddr  <= 5'b0;
-            rf_wdata  <= 32'b0;
-            rf_we     <= 1'b0;
 
             alu_opcode <= 32'b0;
             alu_in1 <= 32'b0;
             alu_in2 <= 32'b0;
 
             state_curr <= WAIT;
-
-            instr_reg <= 32'b0;
+            // Pre IF
             instr_ptr <= INSTR_BASE_ADDR;
-            eval_data <= 32'b0;
-            alu_mem_data <= 32'b0;
+            // IF - ID
+            instr_reg <= 32'b0;
+
+            // ID - ALU
+            id_alu_mre <= 1'b0;
+            id_alu_mwe <= 1'b0;
+            id_alu_mwdata <= 32'b0;
+
+            id_alu_wbwe <= 1'b0;
+            id_alu_wbaddr <= 5'b0;
+
+            // ALU - MEM
+            alu_mem_mwe <= 1'b0;
+            alu_mem_mre <= 1'b0;
+            alu_mem_mbe <= 4'b0;
+            alu_mem_wbdata <= 32'b0;
             alu_mem_addr <= 32'b0;
 
+            alu_mem_wbwe <= 1'b0;
+            alu_mem_wbaddr <= 5'b0;
+
+            // MEM - WB
+            mem_wb_we <= 1'b0;
+            mem_wb_addr <= 5'b0;
             mem_wb_data <= 32'b0;
         end else begin
             case(state_curr)
             WAIT: begin
                 state_curr <= INSTRUCTION_FETCH;
-                rf_we <= 1'b0;
             end
             DONE: begin
-                rf_we <= 1'b0;
             end
             INSTRUCTION_FETCH: begin
                 if(dau_instr_ack_i) begin
                     state_curr <= INSTRUCTION_DECODE;
                     instr_reg <= dau_instr_data_i;
-                end else begin
-                    rf_we <= 1'b0;
-                end
+                end 
             end
             INSTRUCTION_DECODE: begin
                 if(instr_reg == 32'b0) begin
@@ -217,69 +247,50 @@ module cu_fast (
                     alu_in1 <= rf_rdata1;
                     alu_in2 <= rf_rdata2;
                     alu_opcode <= instr_reg;
+
+                    id_alu_mwe <= decoder_mwe;
+                    id_alu_mre <= decoder_mre;
+                    id_alu_mwdata <= rf_rdata2;
+
+                    id_alu_wbwe <= decoder_we;
+                    id_alu_wbaddr <= decoder_waddr;
+
                     state_curr <= EXECUTION;
                 end
             end
             EXECUTION:begin
                 state_curr <= DEVICE_ACCESS;
+
+                alu_mem_mwe <= id_alu_mwe;
+                alu_mem_mre <= id_alu_mre;
+                alu_mem_mbe <= alu_mbe_adjusted;
+                alu_mem_addr <= alu_out;
+                alu_mem_data <= alu_mwdata_adjusted;
+
+                alu_mem_wbwe <= id_alu_wbwe;
+                alu_mem_wbaddr <= id_alu_wbaddr;
+                alu_mem_wbdata <= alu_out;
             end
             DEVICE_ACCESS: begin
                 casez (instr_reg)
-                    LB: begin
+                    LOAD: begin
                         if(dau_ack_i) begin
-                            dau_re_o <= 1'b0;
                             state_curr <= WRITE_BACK;
-                            case(alu_out[1:0])
-                            2'b00: eval_data <=  { {24{dau_data_i[7]}}, dau_data_i[7:0]};
-                            2'b01: eval_data <=  { {24{dau_data_i[15]}}, dau_data_i[15:8]};
-                            2'b10: eval_data <=  { {24{dau_data_i[23]}}, dau_data_i[23:16]};
-                            2'b11: eval_data <=  { {24{dau_data_i[31]}}, dau_data_i[31:24]};
-                            endcase
-                        end else begin
-                            dau_re_o <= 1'b1;
-                            dau_addr_o <= alu_out;
-                            dau_byte_en <= 4'b1 << alu_out[1:0];
-                        end
+                            mem_wb_data <= mem_mrdata_adjusted;
+                        end 
                     end
-                    LW: begin
+                    STORE: begin
                         if(dau_ack_i) begin
-                           dau_re_o <= 1'b0;
-                           state_curr <= WRITE_BACK;
-                           eval_data <= dau_data_i;
-
-                        end else begin
-                            dau_re_o <= 1'b1;
-                            dau_addr_o <= alu_out;
-                            dau_byte_en <= 4'b1111;
-                        end
-                    end 
-                    SW: begin
-                        if(dau_ack_i) begin
-                            dau_we_o <= 1'b0;
                             state_curr <= WRITE_BACK;
-                        end else begin
-                            dau_we_o <= 1'b1;
-                            dau_addr_o <= alu_out;
-                            dau_data_o <= rf_rdata2;
-                            dau_byte_en <= 4'b1111;
-                        end
-                    end
-                    SB: begin
-                        if(dau_ack_i) begin
-                            dau_we_o <= 1'b0;
-                            state_curr <= WRITE_BACK;
-                        end else begin
-                            dau_we_o <= 1'b1;
-                            dau_addr_o <= alu_out;
-                            dau_data_o <= rf_rdata2 << { alu_out[1:0] , 3'b000 };
-                            dau_byte_en <= 4'b1 << alu_out[1:0];
-                        end
+                        end 
                     end
                     default: begin
-                        eval_data <= alu_out;
+                        mem_wb_data <= alu_mem_wbdata;
                         state_curr <= WRITE_BACK;
                     end
                 endcase 
+                mem_wb_we <= alu_mem_wbwe;
+                mem_wb_addr <= alu_mem_wbaddr;
             end
             WRITE_BACK: begin
                 casez(instr_reg)
@@ -290,46 +301,87 @@ module cu_fast (
                     // +------------------+----------+----------+--------+-------+----------+
                     // | i[12] | i[10:5] |  rs2  | rs1   | funct3 | i[4:1] | i[11] | opcode |
                     // +------------------+----------+----------+--------+-------+----------+
-                    instr_ptr <= (eval_data == 32'b1) ?  { 
+                    instr_ptr <= (mem_wb_data == 32'b1) ?  { 
                         instr_ptr[31:13],
                     instr_ptr[12:0] + { instr_reg[31], instr_reg[7], instr_reg[30:25], instr_reg[11:8], 1'b0 } 
                     }
                     : instr_ptr + 32'd4;
                 end
-                SB: begin
-                    instr_ptr <= instr_ptr + 32'd4;
-                end
-                SW: begin
-                    instr_ptr <= instr_ptr + 32'd4;
-                end
                 default: begin
-                    rf_waddr <= instr_reg[11:7];
-                    rf_wdata <= eval_data;
-                    rf_we <= 1'b1;
                     instr_ptr <= instr_ptr + 32'd4;
                 end
                 endcase
-                if(instr_reg == 32'b0)
-                    state_curr <= WAIT;
-                else
-                    state_curr <= INSTRUCTION_FETCH;
+                state_curr <= INSTRUCTION_FETCH;
             end
             endcase
         end
     end     
     always_comb begin
         dau_instr_re_o = 1'b0;
-        rf_raddr1 = 5'b0;
-        rf_raddr2 = 5'b0;
+
+        dau_we_o = 1'b0;
+        dau_re_o = 1'b0;
+        dau_addr_o = 32'b0;
+        dau_byte_en = 4'b0;
+        dau_data_o = 32'b0;
+
+        rf_we = 1'b0;
+        rf_waddr = 5'b0;
+        rf_wdata = 32'b0;
         case(state_curr)
         INSTRUCTION_FETCH: begin
             dau_instr_re_o = 1'b1;
         end
-        INSTRUCTION_DECODE: begin
-            rf_raddr1 = instr_reg[19:15];
-            rf_raddr2 = instr_reg[24:20];
+        DEVICE_ACCESS: begin
+            dau_we_o = alu_mem_mwe;
+            dau_re_o = alu_mem_mre;
+            dau_addr_o = alu_mem_addr;
+            dau_byte_en = alu_mem_mbe;
+            dau_data_o  = alu_mem_data;
+        end
+        WRITE_BACK: begin
+            rf_we = mem_wb_we;
+            rf_waddr = mem_wb_addr;
+            rf_wdata = mem_wb_data;
         end
         endcase
     end
+    // IF
     assign dau_instr_addr_o = instr_ptr;
+    next_instr_ptr ip_predict(
+        .mem_ack(),
+        .curr_ip(instr_ptr),
+        .curr_instr(dau_instr_data_i),
+        .next_ip_pred(next_ip_pred),
+        .jump_pred(jump_pred)
+    );
+    // ID
+    instr_decoder instruction_decoder(
+        .instr(instr_reg),
+        .raddr1(rf_raddr1),
+        .raddr2(rf_raddr2),
+        .waddr(decoder_waddr),
+        .we   (decoder_we),
+
+        .mem_re(decoder_mre),
+        .mem_we(decoder_mwe)
+    );
+    // ALU
+    mem_data_offset_adjust mem_write_adjust(
+        .mem_we(id_alu_mwe),
+        .write_address(alu_out),
+        .instr(instr_reg),
+
+        .in_data(id_alu_mwdata),
+        .out_data(alu_mwdata_adjusted),
+        .out_be(alu_mbe_adjusted)
+    );
+    // MEM
+    mem_data_recv_adjust mem_read_adjust(
+        .instr(instr_reg),
+        .mem_addr(alu_mem_addr),
+        .data_i(dau_data_i),
+        .data_o(mem_mrdata_adjusted)
+    );
+
 endmodule
