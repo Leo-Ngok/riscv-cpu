@@ -72,7 +72,7 @@ module id_ex(
     input wire bubble,
     output reg error,
 
-    // Prepare for what ALU need.
+    // Control signals.
     input wire [31:0] id_ip,
     output reg [31:0] ex_ip,
 
@@ -82,6 +82,7 @@ module id_ex(
     input wire [31:0] id_instr,
     output reg [31:0] ex_instr,
 
+    // Prepare for what ALU need.
     input wire [31:0] id_op1,
     output reg [31:0] ex_op1,
 
