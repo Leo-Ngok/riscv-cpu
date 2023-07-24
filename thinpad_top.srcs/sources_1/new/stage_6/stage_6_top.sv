@@ -253,6 +253,7 @@ module stage_6_top (
     .alu_out   (alu_out   ),
 
     .step(step),
-    .dip_sw(dip_sw)
+    .dip_sw(dip_sw),
+    .curr_ip_out(leds)
   );
 endmodule

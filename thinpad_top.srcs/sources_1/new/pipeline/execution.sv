@@ -82,3 +82,41 @@ module mem_data_offset_adjust(
     end
 endmodule
 
+module adjust_ip(
+    input wire [31:0] instr,
+    input wire [31:0] cmp_res,
+    input wire has_pred_jump,
+    input wire [31:0] curr_ip,
+    output reg        take_ip,
+    output reg [31:0] new_ip
+);
+    always_comb begin
+        if(instr[6:0] == 7'b1100011) begin
+            if(cmp_res[0] != has_pred_jump) begin
+                take_ip = 1'b1;
+                if(cmp_res[0] == 1'b1) begin // needs jump, predict no jump
+                // https://riscv.org/wp-content/uploads/2017/05/riscv-spec-v2.2.pdf 
+                    // p. 17
+                    //   31    |  30:25  | 24:20 | 19:15 | 14:12  | 11:8   | 7     | 6:0    |
+                    // +------------------+----------+----------+--------+-------+----------+
+                    // | i[12] | i[10:5] |  rs2  | rs1   | funct3 | i[4:1] | i[11] | opcode |
+                    // +------------------+----------+----------+--------+-------+----------+
+                    new_ip = {
+                        curr_ip[31:13],
+                        curr_ip[12:0] + {
+                            instr[31], instr[7], instr[30:25], instr[11:8], 1'b0
+                        }
+                    };
+                end else begin // predict jump, no jump needed
+                    new_ip = curr_ip + 32'd4;
+                end
+            end else begin
+                new_ip = 32'b0;
+                take_ip = 1'b0;
+            end
+        end else begin
+            take_ip = 1'b0;
+            new_ip = curr_ip + 32'd4;
+        end
+    end
+endmodule

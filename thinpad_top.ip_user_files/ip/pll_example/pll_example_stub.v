@@ -1,7 +1,7 @@
 // Copyright 1986-2019 Xilinx, Inc. All Rights Reserved.
 // --------------------------------------------------------------------------------
 // Tool Version: Vivado v.2019.2 (win64) Build 2708876 Wed Nov  6 21:40:23 MST 2019
-// Date        : Sat Jul 22 23:29:49 2023
+// Date        : Mon Jul 24 11:52:38 2023
 // Host        : LAPTOP-92IKODO2 running 64-bit major release  (build 9200)
 // Command     : write_verilog -force -mode synth_stub
 //               D:/github/THU_PASS/Organization/remake/thinpad_top/thinpad_top.srcs/sources_1/ip/pll_example/pll_example_stub.v
