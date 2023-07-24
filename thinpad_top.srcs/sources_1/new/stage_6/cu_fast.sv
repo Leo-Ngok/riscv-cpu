@@ -29,9 +29,9 @@ module cu_fast (
     output reg        rf_we,
 
     // ALU
-    output reg [31:0] alu_opcode,
-    output reg [31:0] alu_in1,
-    output reg [31:0] alu_in2,
+    output wire [31:0] alu_opcode,
+    output wire [31:0] alu_in1,
+    output wire [31:0] alu_in2,
     input wire [31:0] alu_out,
 
     // Control signals
@@ -39,10 +39,6 @@ module cu_fast (
     input wire [31:0] dip_sw,
     output wire [15:0] curr_ip_out
 );
-
-    parameter LOAD_STORE = 32'b????_????_????_????_????_????_?0?0_0011;
-    parameter LOAD = 32'b????_????_????_????_????_????_?000_0011;
-    parameter STORE= 32'b????_????_????_????_????_????_?010_0011;
     
     typedef enum logic [3:0] {
         WAIT,
@@ -58,7 +54,6 @@ module cu_fast (
     assign curr_ip_out = if_id_ip;
     state_t state_curr;
     // Pre - IF
-    //reg [31:0] instr_ptr;
     reg [31:0] pre_if_ip;
     // IF
     wire jump_pred;
@@ -77,6 +72,9 @@ module cu_fast (
     reg [31:0] id_alu_ip;
     reg        id_alu_jump_pred;
     reg [31:0] id_alu_instr;
+
+    reg [31:0]  id_alu_op1;
+    reg [31:0]  id_alu_op2;
 
     reg         id_alu_mwe;
     reg         id_alu_mre;
@@ -104,6 +102,8 @@ module cu_fast (
     reg [31:0] alu_mem_wbdata;
     // MEM
     wire [31:0] mem_mrdata_adjusted;
+    wire [31:0] mem_rf_wdata;
+    wire        mem_pause;
     // MEM - WB
     reg mem_wb_we;
     reg [ 4:0] mem_wb_addr;
@@ -111,15 +111,11 @@ module cu_fast (
 
     always_ff @(posedge clk or posedge rst) begin
         if(rst) begin
-
-            alu_opcode <= 32'b0;
-            alu_in1 <= 32'b0;
-            alu_in2 <= 32'b0;
-
             state_curr <= WAIT;
+
             // Pre IF
             pre_if_ip <= INSTR_BASE_ADDR;
-            //instr_ptr <= INSTR_BASE_ADDR;
+
             // IF - ID
             if_id_instr <= 32'b0;
             if_id_ip <= 32'b0;
@@ -129,6 +125,9 @@ module cu_fast (
             id_alu_ip <= 32'b0;
             id_alu_jump_pred <= 1'b0;
             id_alu_instr <= 32'b0;
+            
+            id_alu_op1 <= 32'b0;
+            id_alu_op2 <= 32'b0;
 
             id_alu_mre <= 1'b0;
             id_alu_mwe <= 1'b0;
@@ -175,13 +174,12 @@ module cu_fast (
                 if(if_id_instr == 32'b0) begin
                     state_curr <= DONE;
                 end else begin
-                    alu_in1 <= rf_rdata1;
-                    alu_in2 <= rf_rdata2;
-                    alu_opcode <= if_id_instr;
-
                     id_alu_ip <= if_id_ip;
                     id_alu_jump_pred <= if_id_jump_pred;
                     id_alu_instr <= if_id_instr;
+
+                    id_alu_op1 <= rf_rdata1;
+                    id_alu_op2 <= rf_rdata2;
 
                     id_alu_mwe <= decoder_mwe;
                     id_alu_mre <= decoder_mre;
@@ -212,25 +210,12 @@ module cu_fast (
                 end
             end
             DEVICE_ACCESS: begin
-                casez (alu_mem_instr)
-                    LOAD: begin
-                        if(dau_ack_i) begin
-                            state_curr <= WRITE_BACK;
-                            mem_wb_data <= mem_mrdata_adjusted;
-                        end 
-                    end
-                    STORE: begin
-                        if(dau_ack_i) begin
-                            state_curr <= WRITE_BACK;
-                        end 
-                    end
-                    default: begin
-                        mem_wb_data <= alu_mem_wbdata;
-                        state_curr <= WRITE_BACK;
-                    end
-                endcase 
-                mem_wb_we <= alu_mem_wbwe;
-                mem_wb_addr <= alu_mem_wbaddr;
+                if(~mem_pause) begin
+                    state_curr <= WRITE_BACK;
+                    mem_wb_we <= alu_mem_wbwe;
+                    mem_wb_addr <= alu_mem_wbaddr;
+                    mem_wb_data <= mem_rf_wdata;
+                end
             end
             WRITE_BACK: begin
                 state_curr <= INSTRUCTION_FETCH;
@@ -269,10 +254,10 @@ module cu_fast (
         endcase
     end
     // IF
-    assign dau_instr_addr_o = pre_if_ip; //instr_ptr;
+    assign dau_instr_addr_o = pre_if_ip;
     next_instr_ptr ip_predict(
         .mem_ack(),
-        .curr_ip(/*instr_ptr*/ pre_if_ip),
+        .curr_ip(pre_if_ip),
         .curr_instr(dau_instr_data_i),
         .next_ip_pred(next_ip_pred),
         .jump_pred(jump_pred)
@@ -289,6 +274,11 @@ module cu_fast (
         .mem_we(decoder_mwe)
     );
     // ALU
+
+    assign alu_opcode = id_alu_instr;
+    assign alu_in1 = id_alu_op1;
+    assign alu_in2 = id_alu_op2;
+
     adjust_ip ip_correction(
         .instr(id_alu_instr),
         .cmp_res(alu_out),
@@ -313,5 +303,149 @@ module cu_fast (
         .data_i(dau_data_i),
         .data_o(mem_mrdata_adjusted)
     );
+    rf_write_data_mux rf_wdata_mux(
+        .rf_we(alu_mem_wbwe),
+        .mem_re(alu_mem_mre),
+        .alu_data(alu_mem_wbdata),
+        .mem_data(mem_mrdata_adjusted),
+        .out_data(mem_rf_wdata)
+    );
+    devacc_pause device_access_pause(
+        .mem_instr(alu_mem_instr),
+        .dau_ack(dau_ack_i),
+        .pause_o(mem_pause)
+    );
+    reg if_id_bubble;
+    reg id_ex_bubble;
+    reg ex_mem_bubble;
+    reg mem_wb_bubble;
+    always_comb begin
+        if_id_bubble = 1;
+        id_ex_bubble = 1;
+        ex_mem_bubble = 1;
+        mem_wb_bubble = 1;
+        case(state_curr)
+        INSTRUCTION_FETCH: begin
+            if(dau_instr_ack_i) begin
+                if_id_bubble = 0;
+            end
+        end
+        INSTRUCTION_DECODE: begin
+            id_ex_bubble = 0;
+        end
+        EXECUTION: begin
+            ex_mem_bubble = 0;
+        end
+        DEVICE_ACCESS: begin
+            if(~mem_pause) begin
+                mem_wb_bubble = 0;
+            end
+        end
+        endcase
+    end 
+    /*if_id ppl_if_id(
+        .clock(clk),
+        .reset(rst),
 
+        .stall(1'b0), // TODO: No, do this when you impl mem access stage
+        .bubble(if_invalid), // ==============================================================
+        .error(), 
+
+        .if_instr(/*dau_data_i instr_fetched),
+        .id_instr(id_instr)
+    );
+
+    id_ex ppl_id_ex(
+        .clock(clk),
+        .reset(rst),
+
+        .stall(1'b0), // TODO: Add stall when implementing memory access stage
+        .bubble(1'b0),// ==============================================================
+        .error(),
+        
+        // Prepare for what ALU need.
+        .id_op1(id_rdata1_to_alu),
+        .id_op2(id_rdata2_to_alu),
+
+        .ex_op1(alu_in1),
+        .ex_op2(alu_in2),
+
+        .id_instr(id_instr),
+        .ex_instr(ex_instr),
+        
+        // TODO: Prepare metadata for device access stage
+        .id_mre(id_mre),
+        .ex_mre(alu_mre),
+
+        .id_mwe(id_mwe),
+        .ex_mwe(alu_mwe),
+
+        .id_mdata(id_rdata2_to_alu), // Note that this bus is used only in STORE instructions.
+        .ex_mdata(alu_mdata_in),
+
+        // Metadata for write back stage.
+        .id_we(id_we),
+        .ex_we(alu_we),
+
+        .id_wraddr(id_waddr),
+        .ex_wraddr(alu_waddr)
+    );
+    ex_mem ppl_ex_mem(
+        .clock(clk),
+        .reset(rst),
+
+        .stall(1'b0),
+        .bubble(1'b0),
+        .error(),
+        
+        // TODO: Add memory access signals input.
+        .ex_mre(alu_mre),
+        .mem_mre(mem_mre),
+
+        .ex_mwe(alu_mwe),
+        .mem_mwe(mem_mbe),
+
+        .ex_mbe(alu_mbe_out),
+        .mem_mbe(mem_mbe),
+
+        .ex_maddr(alu_out), // we always calculate sum of base and offset for mem address
+        .mem_maddr(mem_mdata_write),
+
+        .ex_mdata(alu_mdata_out),
+        .mem_mdata(mem_mdata_write),
+
+        // Metadata for next stage.
+        .ex_we (alu_we),
+        .mem_we(mem_we),
+
+        .ex_wraddr (alu_waddr),
+        .mem_wraddr(mem_waddr),
+
+        .ex_wdata (alu_wdata),
+        .mem_wdata(mem_wdata), // TODO: Modify this to support
+                               // memory write
+
+        .ex_instr (ex_instr),
+        .mem_instr(mem_instr)
+    );
+    mem_wb ppl_mem_wb(
+        .clock(clk),
+        .reset(rst),
+
+        .stall(1'b0),
+        .bubble(1'b0),
+        .error(),
+
+        .mem_we(mem_we),
+        .wb_we (wb_we),
+
+        .mem_wraddr(mem_waddr),
+        .wb_wraddr (wb_waddr),
+
+        .mem_wdata(mem_wdata),
+        .wb_wdata (wb_wdata),
+
+        .mem_instr(mem_instr),
+        .wb_instr()
+    );*/
 endmodule

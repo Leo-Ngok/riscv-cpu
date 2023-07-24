@@ -33,20 +33,32 @@ module if_id(
     input wire bubble,
     output reg error,
 
+    input wire [31:0] if_ip,
+    output reg [31:0] id_ip,
+
+    input wire        if_jump_pred,
+    output reg        id_jump_pred,
+
     input wire [31:0] if_instr,
     output reg [31:0] id_instr 
 );
     parameter NOP = 32'b0000_0000_0000_0000_0000_0000_0001_0011;
+    parameter INSTR_BASE_ADDR = 32'h8000_0000;
     always_ff @(posedge clock or posedge reset) begin
         if(reset) begin
             id_instr <= NOP;
             error    <=  1'b0;
         end else begin
-            error <= stall && bubble;
+            // error <= stall && bubble;
             if(bubble) begin
-                id_instr <= NOP;
+                id_ip        <= INSTR_BASE_ADDR;
+                id_jump_pred <= 1'b0;
+                id_instr     <= NOP;
+
             end else if(!stall) begin
-                id_instr <= if_instr;
+                id_ip        <= if_ip;
+                id_jump_pred <= if_jump_pred;
+                id_instr     <= if_instr;
             end
         end 
     end
@@ -61,14 +73,20 @@ module id_ex(
     output reg error,
 
     // Prepare for what ALU need.
+    input wire [31:0] id_ip,
+    output reg [31:0] ex_ip,
+
+    input wire        id_jump_pred,
+    output reg        ex_jump_pred,
+
+    input wire [31:0] id_instr,
+    output reg [31:0] ex_instr,
+
     input wire [31:0] id_op1,
     output reg [31:0] ex_op1,
 
     input wire [31:0] id_op2, 
     output reg [31:0] ex_op2,
-
-    input wire [31:0] id_instr,
-    output reg [31:0] ex_instr,
 
     // Metadata for Device access stage -- maddr
     // is calculated in ALU stage.
@@ -93,12 +111,18 @@ module id_ex(
     output reg [ 4:0] ex_wraddr
 );
     parameter NOP = 32'b0000_0000_0000_0000_0000_0000_0001_0011;
+    parameter INSTR_BASE_ADDR = 32'h8000_0000;
+
     always_ff @(posedge clock or posedge reset) begin
         if(reset) begin
+            // 0. Control
+            ex_ip       <= INSTR_BASE_ADDR;
+            ex_jump_pred <= 1'b0;
+            ex_instr    <= NOP;
+
             // 1. ALU
             ex_op1      <= 32'b0;
             ex_op2      <= 32'b0;
-            ex_instr    <= NOP;
 
             // 2. Device
             ex_mre      <=  1'b0;
@@ -111,14 +135,17 @@ module id_ex(
             ex_wraddr   <= 5'b0;
             error <= 1'b0;
         end else begin
-            error <= stall && bubble;
+            // error <= stall && bubble;
             if(bubble) begin
                 // NOP = addi x0, x0, 0
+                // 0. Control
+                // ex_ip       <= INSTR_BASE_ADDR; No, don't do this
+                ex_jump_pred <= 1'b0;
+                ex_instr    <= NOP;
 
                 // 1. ALU
                 ex_op1      <= 32'b0;
                 ex_op2      <= 32'b0;
-                ex_instr    <= NOP;
 
                 // 2. Device
                 ex_mre      <=  1'b0;
@@ -131,10 +158,14 @@ module id_ex(
                 ex_wraddr   <=  5'b0;
 
             end else if(!stall) begin
+                // 0. Control
+                ex_ip       <= id_ip;
+                ex_jump_pred <= id_jump_pred;
+                ex_instr    <= id_instr;
+                
                 // 1. ALU
                 ex_op1      <= id_op1;
                 ex_op2      <= id_op2;
-                ex_instr    <= id_instr;
 
                 // 2. Device
                 ex_mre      <= id_mre;
@@ -212,6 +243,9 @@ module ex_mem(
     output reg error,
     
     // Prepare for what DAU need.
+    input wire [31:0]  ex_instr,
+    output reg [31:0] mem_instr,
+
     input wire         ex_mre,
     output reg        mem_mre,
 
@@ -235,11 +269,7 @@ module ex_mem(
     output reg [ 4:0] mem_wraddr,
 
     input wire [31:0]  ex_wdata,
-    output reg [31:0] mem_wdata,
-
-    // For your convenience to debug.
-    input wire [31:0]  ex_instr,
-    output reg [31:0] mem_instr
+    output reg [31:0] mem_wdata
 );
     parameter NOP = 32'b0000_0000_0000_0000_0000_0000_0001_0011;
 
@@ -281,6 +311,9 @@ module ex_mem(
                 // Debug only.
                 mem_instr  <=   NOP;
             end else if (!stall) begin
+                mem_instr  <= ex_instr;
+
+                // 1. Device
                 mem_mre    <= ex_mre;
                 mem_mwe    <= ex_mwe;
                 mem_mbe    <= ex_mbe;
@@ -292,8 +325,6 @@ module ex_mem(
                 mem_wraddr <= ex_wraddr;
                 mem_wdata  <= ex_wdata;
 
-                // Debug only.
-                mem_instr  <= ex_instr;
             end
         end
     end

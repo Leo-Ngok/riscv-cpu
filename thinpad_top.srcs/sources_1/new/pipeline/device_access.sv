@@ -58,3 +58,42 @@ module mem_data_recv_adjust(
         endcase
     end
 endmodule
+
+module rf_write_data_mux(
+    input wire rf_we,
+    input wire mem_re,
+    input wire [31:0] alu_data,
+    input wire [31:0] mem_data,
+    output reg [31:0] out_data
+);
+    always_comb begin
+        if(rf_we) begin
+            if(mem_re) begin
+                out_data = mem_data;
+            end else begin
+                out_data = alu_data;
+            end
+        end else begin
+            out_data = 32'b0;
+        end
+    end
+endmodule
+
+module devacc_pause(
+    input wire [31:0] mem_instr,
+    input wire dau_ack,
+    output reg pause_o
+);
+
+    parameter LOAD_STORE = 32'b????_????_????_????_????_????_?0?0_0011;
+    parameter LOAD = 32'b????_????_????_????_????_????_?000_0011;
+    parameter STORE= 32'b????_????_????_????_????_????_?010_0011;
+    
+    always_comb begin
+        if(mem_instr[6:0] == 7'b000_0011 || mem_instr[6:0] == 7'b010_0011) begin
+            pause_o = ~dau_ack;
+        end else begin
+            pause_o = 1'b0;
+        end
+    end
+endmodule    
