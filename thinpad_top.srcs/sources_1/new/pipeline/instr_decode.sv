@@ -78,6 +78,9 @@ module instr_mux(
     output reg [31:0] rdata2_out
 );
     always_comb begin
+        if(raddr1 == 5'b0) begin
+            rdata1_out = 32'b0;
+        end else begin
         if(alu_we && (alu_waddr == raddr1)) begin
             rdata1_out = alu_wdata;
         end else if(mem_we && (mem_waddr == raddr1) ) begin
@@ -87,9 +90,13 @@ module instr_mux(
         end else begin
             rdata1_out = rdata1;
         end
+        end
     end
 
     always_comb begin
+        if(raddr2 == 5'b0) begin
+            rdata2_out = 32'b0;
+        end else begin
         if(alu_we && (alu_waddr == raddr2)) begin
             rdata2_out = alu_wdata;
         end else if(mem_we && (mem_waddr == raddr2) ) begin
@@ -98,6 +105,7 @@ module instr_mux(
             rdata2_out = wb_wdata;
         end else begin
             rdata2_out = rdata2;
+        end
         end
     end
 endmodule

@@ -317,36 +317,38 @@ module dau_i_d (
     logic [3:0] wbs0_sel_o;
     logic wbs0_we_o;
 
-    wb_arbiter_2 base_sram_arbiter(
+    wb_arbiter_2 #(
+        .ARB_LSB_HIGH_PRIORITY(0)
+    ) base_sram_arbiter(
         .clk(sys_clk),
         .rst(sys_rst),
     /*
      * Wishbone master 0 input
      */
-     .wbm0_adr_i(instr_mux_arb0_adr_o),
-     .wbm0_dat_i(instr_mux_arb0_dat_o),
-     .wbm0_dat_o(instr_mux_arb0_dat_i),
-     .wbm0_we_i (instr_mux_arb0_we_o),
-     .wbm0_sel_i(instr_mux_arb0_sel_o),
-     .wbm0_stb_i(instr_mux_arb0_stb_o),
-     .wbm0_ack_o(instr_mux_arb0_ack_i),
-     .wbm0_err_o(),
-     .wbm0_rty_o(),
-     .wbm0_cyc_i(instr_mux_arb0_cyc_o),
+     .wbm1_adr_i(instr_mux_arb0_adr_o),
+     .wbm1_dat_i(instr_mux_arb0_dat_o),
+     .wbm1_dat_o(instr_mux_arb0_dat_i),
+     .wbm1_we_i (instr_mux_arb0_we_o),
+     .wbm1_sel_i(instr_mux_arb0_sel_o),
+     .wbm1_stb_i(instr_mux_arb0_stb_o),
+     .wbm1_ack_o(instr_mux_arb0_ack_i),
+     .wbm1_err_o(),
+     .wbm1_rty_o(),
+     .wbm1_cyc_i(instr_mux_arb0_cyc_o),
 
     /*
      * Wishbone master 1 input
      */
-     .wbm1_adr_i(data_mux_arb0_adr_o),
-     .wbm1_dat_i(data_mux_arb0_dat_o),
-     .wbm1_dat_o(data_mux_arb0_dat_i),
-     .wbm1_we_i (data_mux_arb0_we_o),
-     .wbm1_sel_i(data_mux_arb0_sel_o),
-     .wbm1_stb_i(data_mux_arb0_stb_o),
-     .wbm1_ack_o(data_mux_arb0_ack_i),
-     .wbm1_err_o(),
-     .wbm1_rty_o(),
-     .wbm1_cyc_i(data_mux_arb0_cyc_o),
+     .wbm0_adr_i(data_mux_arb0_adr_o),
+     .wbm0_dat_i(data_mux_arb0_dat_o),
+     .wbm0_dat_o(data_mux_arb0_dat_i),
+     .wbm0_we_i (data_mux_arb0_we_o),
+     .wbm0_sel_i(data_mux_arb0_sel_o),
+     .wbm0_stb_i(data_mux_arb0_stb_o),
+     .wbm0_ack_o(data_mux_arb0_ack_i),
+     .wbm0_err_o(),
+     .wbm0_rty_o(),
+     .wbm0_cyc_i(data_mux_arb0_cyc_o),
 
     /*
      * Wishbone slave output
@@ -373,36 +375,38 @@ module dau_i_d (
     logic [3:0] wbs1_sel_o;
     logic wbs1_we_o;
 
-    wb_arbiter_2 ext_sram_arbiter(
+    wb_arbiter_2 #(
+        .ARB_LSB_HIGH_PRIORITY(0)
+    ) ext_sram_arbiter(
         .clk(sys_clk),
         .rst(sys_rst),
     /*
      * Wishbone master 0 input
      */
-     .wbm0_adr_i(instr_mux_arb1_adr_o),
-     .wbm0_dat_i(instr_mux_arb1_dat_o),
-     .wbm0_dat_o(instr_mux_arb1_dat_i),
-     .wbm0_we_i (instr_mux_arb1_we_o),
-     .wbm0_sel_i(instr_mux_arb1_sel_o),
-     .wbm0_stb_i(instr_mux_arb1_stb_o),
-     .wbm0_ack_o(instr_mux_arb1_ack_i),
-     .wbm0_err_o(),
-     .wbm0_rty_o(),
-     .wbm0_cyc_i(instr_mux_arb1_cyc_o),
+     .wbm1_adr_i(instr_mux_arb1_adr_o),
+     .wbm1_dat_i(instr_mux_arb1_dat_o),
+     .wbm1_dat_o(instr_mux_arb1_dat_i),
+     .wbm1_we_i (instr_mux_arb1_we_o),
+     .wbm1_sel_i(instr_mux_arb1_sel_o),
+     .wbm1_stb_i(instr_mux_arb1_stb_o),
+     .wbm1_ack_o(instr_mux_arb1_ack_i),
+     .wbm1_err_o(),
+     .wbm1_rty_o(),
+     .wbm1_cyc_i(instr_mux_arb1_cyc_o),
 
     /*
      * Wishbone master 1 input
      */
-     .wbm1_adr_i(data_mux_arb1_adr_o),
-     .wbm1_dat_i(data_mux_arb1_dat_o),
-     .wbm1_dat_o(data_mux_arb1_dat_i),
-     .wbm1_we_i (data_mux_arb1_we_o),
-     .wbm1_sel_i(data_mux_arb1_sel_o),
-     .wbm1_stb_i(data_mux_arb1_stb_o),
-     .wbm1_ack_o(data_mux_arb1_ack_i),
-     .wbm1_err_o(),
-     .wbm1_rty_o(),
-     .wbm1_cyc_i(data_mux_arb1_cyc_o),
+     .wbm0_adr_i(data_mux_arb1_adr_o),
+     .wbm0_dat_i(data_mux_arb1_dat_o),
+     .wbm0_dat_o(data_mux_arb1_dat_i),
+     .wbm0_we_i (data_mux_arb1_we_o),
+     .wbm0_sel_i(data_mux_arb1_sel_o),
+     .wbm0_stb_i(data_mux_arb1_stb_o),
+     .wbm0_ack_o(data_mux_arb1_ack_i),
+     .wbm0_err_o(),
+     .wbm0_rty_o(),
+     .wbm0_cyc_i(data_mux_arb1_cyc_o),
 
     /*
      * Wishbone slave output
@@ -428,36 +432,38 @@ module dau_i_d (
     logic [3:0] wbs2_sel_o;
     logic wbs2_we_o;
 
-    wb_arbiter_2 uart_arbiter(
+    wb_arbiter_2 #(
+        .ARB_LSB_HIGH_PRIORITY(0)
+    ) uart_arbiter(
         .clk(sys_clk),
         .rst(sys_rst),
     /*
      * Wishbone master 0 input
      */
-     .wbm0_adr_i(instr_mux_arb2_adr_o),
-     .wbm0_dat_i(instr_mux_arb2_dat_o),
-     .wbm0_dat_o(instr_mux_arb2_dat_i),
-     .wbm0_we_i (instr_mux_arb2_we_o),
-     .wbm0_sel_i(instr_mux_arb2_sel_o),
-     .wbm0_stb_i(instr_mux_arb2_stb_o),
-     .wbm0_ack_o(instr_mux_arb2_ack_i),
-     .wbm0_err_o(),
-     .wbm0_rty_o(),
-     .wbm0_cyc_i(instr_mux_arb2_cyc_o),
+     .wbm1_adr_i(instr_mux_arb2_adr_o),
+     .wbm1_dat_i(instr_mux_arb2_dat_o),
+     .wbm1_dat_o(instr_mux_arb2_dat_i),
+     .wbm1_we_i (instr_mux_arb2_we_o),
+     .wbm1_sel_i(instr_mux_arb2_sel_o),
+     .wbm1_stb_i(instr_mux_arb2_stb_o),
+     .wbm1_ack_o(instr_mux_arb2_ack_i),
+     .wbm1_err_o(),
+     .wbm1_rty_o(),
+     .wbm1_cyc_i(instr_mux_arb2_cyc_o),
 
     /*
      * Wishbone master 1 input
      */
-     .wbm1_adr_i(data_mux_arb2_adr_o),
-     .wbm1_dat_i(data_mux_arb2_dat_o),
-     .wbm1_dat_o(data_mux_arb2_dat_i),
-     .wbm1_we_i (data_mux_arb2_we_o),
-     .wbm1_sel_i(data_mux_arb2_sel_o),
-     .wbm1_stb_i(data_mux_arb2_stb_o),
-     .wbm1_ack_o(data_mux_arb2_ack_i),
-     .wbm1_err_o(),
-     .wbm1_rty_o(),
-     .wbm1_cyc_i(data_mux_arb2_cyc_o),
+     .wbm0_adr_i(data_mux_arb2_adr_o),
+     .wbm0_dat_i(data_mux_arb2_dat_o),
+     .wbm0_dat_o(data_mux_arb2_dat_i),
+     .wbm0_we_i (data_mux_arb2_we_o),
+     .wbm0_sel_i(data_mux_arb2_sel_o),
+     .wbm0_stb_i(data_mux_arb2_stb_o),
+     .wbm0_ack_o(data_mux_arb2_ack_i),
+     .wbm0_err_o(),
+     .wbm0_rty_o(),
+     .wbm0_cyc_i(data_mux_arb2_cyc_o),
 
     /*
      * Wishbone slave output

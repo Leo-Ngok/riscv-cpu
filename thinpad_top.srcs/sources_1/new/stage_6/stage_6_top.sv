@@ -220,7 +220,7 @@ module stage_6_top (
     .PULSE_OUT(step)
   );
 
-  cu_fast control_unit(
+  cu_pipeline control_unit(
     .clk(sys_clk),
     .rst(sys_rst),
     

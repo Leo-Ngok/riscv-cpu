@@ -54,7 +54,7 @@ module cu_fast (
     assign curr_ip_out = id_ip;
     state_t state_curr;
     // Pre - IF
-    reg [31:0] pre_if_ip;
+    wire [31:0] pre_if_ip;
     // IF
     wire jump_pred;
     wire [31:0] next_ip_pred;
@@ -117,9 +117,6 @@ module cu_fast (
     always_ff @(posedge clk or posedge rst) begin
         if(rst) begin
             state_curr <= WAIT;
-            // Pre IF
-            pre_if_ip <= INSTR_BASE_ADDR;
-
         end else begin
             case(state_curr)
             WAIT: begin
@@ -130,7 +127,6 @@ module cu_fast (
             INSTRUCTION_FETCH: begin
                 if(dau_instr_ack_i) begin
                     state_curr <= INSTRUCTION_DECODE;
-                    pre_if_ip <= next_ip_pred;
                 end 
             end
             INSTRUCTION_DECODE: begin
@@ -142,9 +138,6 @@ module cu_fast (
             end
             EXECUTION:begin
                 state_curr <= DEVICE_ACCESS;
-                if(alu_take_ip) begin
-                    pre_if_ip <= alu_new_ip;
-                end
             end
             DEVICE_ACCESS: begin
                 if(~mem_pause) begin
@@ -156,7 +149,7 @@ module cu_fast (
             end
             endcase
         end
-    end     
+    end
     always_comb begin
         dau_instr_re_o = 1'b0;
         case(state_curr)
@@ -282,6 +275,20 @@ module cu_fast (
         end
         endcase
     end 
+
+    wire pre_if_stall = !(dau_instr_ack_i || alu_take_ip);
+    wire [31:0] next_ip = alu_take_ip ? alu_new_ip : next_ip_pred;
+    pre_if ppl_pre_if(
+        .clock(clk),
+        .reset(rst),
+
+        .stall(pre_if_stall),
+        .bubble(1'b0),
+        .error(),
+
+        .next_instr_ptr(next_ip),
+        .instr_ptr(pre_if_ip)
+    );
     if_id ppl_if_id(
         .clock(clk),
         .reset(rst),
