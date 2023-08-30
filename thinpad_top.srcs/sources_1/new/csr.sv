@@ -7,9 +7,15 @@ module csr(
     output wire [31:0] rdata, // DATA that READS FROM CSR (writes to GP register files)
 
     input  wire [31:0] curr_ip, // Set MEPC
-    input  wire        timer_interrupt // TIME'S UP!
-);
+    input  wire        timer_interrupt, // TIME'S UP!
 
+    output wire       take_ip,
+    output wire [31:0] new_ip
+);
+    typedef enum logic [1:0] { 
+        USER, SUPERVISOR, HYPERVISOR, MACHINE 
+    } priv_mode_t;
+    priv_mode_t privilege;
     /* Let's do these first.
     还需要实现 CSR 寄存器的这些字段：
     1. mtvec: BASE, MODE
@@ -20,7 +26,7 @@ module csr(
     6. mie: MTIE(7)
     7. mip: MTIP(7)
     */
-
+    
     // MACHINE INFORMATION REGISTERS
     reg [31:0] mhartid;  // 0XF14, Hardware thread ID
 
@@ -67,7 +73,11 @@ module csr(
     parameter CSRRSI = 32'b????_????_????_?????_110_?????_1110011;
     parameter CSRRCI = 32'b????_????_????_?????_111_?????_1110011;
 
-    
+    parameter ECALL  = 32'b0000_0000_0000_00000_000_00000_111_0011;
+    parameter EBREAK = 32'b0000_0000_0001_00000_000_00000_111_0011;
+    parameter MRET   =  32'b0011000_00010_00000_000_00000_111_0011;
+    parameter SRET   =  32'b0001000_00010_00000_000_00000_111_0011;
+
     reg [31:0] rdata_comb;
 
     wire [11:0] address = instr[31:20]; // Refer to ISA ZICSR
@@ -119,8 +129,100 @@ module csr(
         endcase
     end
 
+
+    reg [31:0] mstatus_comb;
+    reg [31:0] mcause_comb;
+    priv_mode_t next_priv;
+
+    reg       take_ip_comb;
+    reg [31:0] new_ip_comb;
+
+    always_comb begin
+        mcause_comb = 32'b0;
+        mstatus_comb = mstatus;
+        next_priv = privilege;
+        take_ip_comb = 0;
+        new_ip_comb = 32'h8000_0000;
+        casez(instr)
+        ECALL, EBREAK: begin
+            // volume 2 p.39
+            take_ip_comb = 1;
+            new_ip_comb = {mtvec[31:2], 2'b0};
+
+            case(privilege)
+            USER: begin 
+                mcause_comb = 32'd8;
+            end
+            SUPERVISOR: begin
+                mcause_comb = 32'd9;
+            end
+            HYPERVISOR: begin 
+                mcause_comb = 32'd10; // Deprecated 
+            end
+            MACHINE: begin 
+                mcause_comb = 32'd11; 
+            end
+            endcase
+
+            
+            if(instr == EBREAK) 
+                mcause_comb = 32'd3;
+            
+            next_priv = MACHINE;
+
+            case(next_priv) 
+            USER: begin // Impossible
+            end
+            SUPERVISOR: begin 
+                mstatus_comb = {
+                    mstatus[31:9], privilege[0],
+                    mstatus[7:6], mstatus[1],
+                    mstatus[4:2], 1'b0,
+                    mstatus[0]
+                };
+            end
+            HYPERVISOR: begin // Deprecated
+            end
+            MACHINE: begin 
+                mstatus_comb = {
+                    mstatus[31:13], unsigned'(privilege), 
+                    mstatus[10: 8], mstatus[3], 
+                    mstatus[ 6: 4], 1'b0, 
+                    mstatus[ 2: 0]
+                };
+            end
+            endcase
+
+        end
+        MRET: begin
+            take_ip_comb = 1;
+            new_ip_comb = mepc;
+            mstatus_comb = {
+                mstatus[31:13], 2'b0, 
+                mstatus[10: 8], 1'b1, 
+                mstatus[ 6: 4], mstatus[7], 
+                mstatus[ 2: 0]
+            };
+        end
+        SRET: begin
+            take_ip_comb = 1;
+            // new_ip_comb = sepc; TODO
+            mstatus_comb = {
+                mstatus[31:9], 1'b0,
+                mstatus[7:6], 1'b1,
+                mstatus[4:2], mstatus[5],
+                mstatus[0]
+            };
+        end
+        endcase
+    end
+
+    assign take_ip = take_ip_comb; 
+    assign new_ip = new_ip_comb;
+    
     always_ff @(posedge reset or posedge clock) begin
         if(reset) begin
+            privilege <= MACHINE;
             mhartid <= 32'b0;
 
             mstatus <= 32'b0;
@@ -191,10 +293,27 @@ module csr(
                 12'h180: satp       <= satp    & ~wdata_comb;
                 endcase
             end
+            ECALL, EBREAK: begin
+                privilege <= next_priv;
+                
+                mepc    <= curr_ip;
+                mstatus <= mstatus_comb;
+                mcause  <= mcause_comb;
+                
+            end 
+            MRET: begin
+                privilege <= priv_mode_t'(mstatus[12:11]);
+                mstatus <= mstatus_comb;
+            end
+            SRET: begin
+                privilege <= priv_mode_t'({1'b0, mstatus[8]});
+                mstatus <= mstatus_comb;
+            end
             endcase
         end
     end
-
+    
+    
     // WPRI 
     // Write Preserve, Read Ignore
     // Unused fields

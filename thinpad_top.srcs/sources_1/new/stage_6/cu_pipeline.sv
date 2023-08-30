@@ -46,6 +46,7 @@ module cu_pipeline (
     // IF
     wire jump_pred;
     wire [31:0] next_ip_pred;
+    wire [31:0] next_ip;
     // ID
     // From IF stage
     wire [31:0] id_instr;
@@ -113,6 +114,9 @@ module cu_pipeline (
     wire        mem_pause;
 
     wire [31:0] mem_csrwb;
+
+    wire        mem_csr_take_ip;
+    wire [31:0] mem_csr_new_ip;
     // WB
     wire        wb_we;
     wire [ 4:0] wb_addr;
@@ -127,6 +131,17 @@ module cu_pipeline (
         .curr_instr(dau_instr_data_i),
         .next_ip_pred(next_ip_pred),
         .jump_pred(jump_pred)
+    );
+
+    ip_mux ip_sel(
+        .csr_modif(mem_csr_take_ip),
+        .alu_modif(alu_take_ip),
+
+        .csr_ip(mem_csr_new_ip),
+        .alu_ip(alu_new_ip),
+        .pred_ip(next_ip_pred),
+
+        .res_ip(next_ip)
     );
     // ID
     assign rf_raddr1 = decoder_raddr1;
@@ -231,7 +246,10 @@ module cu_pipeline (
         .rdata(mem_csrwb),
 
         .curr_ip(mem_ip),
-        .timer_interrupt(1'b0) // TODO
+        .timer_interrupt(1'b0), // TODO
+
+        .take_ip(mem_csr_take_ip),
+        .new_ip(mem_csr_new_ip)
     );
     // WB
     assign rf_we    = wb_we;
@@ -264,6 +282,7 @@ module cu_pipeline (
         .mem_instr(mem_instr),
         .mem_waddr(mem_wbaddr),
         .mem_ack  (~mem_pause),
+        .mem_csr_take_ip(mem_csr_take_ip),
 
         .pre_if_stall(pre_if_stall),
 
@@ -280,8 +299,6 @@ module cu_pipeline (
         .mem_wb_bubble(mem_wb_bubble)
     );
 
-    // = !(dau_instr_ack_i || alu_take_ip);
-    wire [31:0] next_ip = alu_take_ip ? alu_new_ip : next_ip_pred;
     pre_if ppl_pre_if(
         .clock(clk),
         .reset(rst),
@@ -446,6 +463,7 @@ module cu_orchestra(
     input wire [31:0] mem_instr,
     input wire [ 4:0] mem_waddr,
     input wire        mem_ack,
+    input wire        mem_csr_take_ip,
 
     output reg pre_if_stall,
 
@@ -518,16 +536,16 @@ module cu_orchestra(
         mem_wb_stall = 0;
         mem_wb_bubble = mem_wait_req;
 
-        alu_mem_stall = mem_wait_req;
-        alu_mem_bubble = (!alu_mem_stall) && alu_wait_req;
+        alu_mem_stall = (!mem_csr_take_ip) && mem_wait_req;
+        alu_mem_bubble = mem_csr_take_ip || ((!alu_mem_stall) && alu_wait_req);
 
-        id_alu_stall = (!alu_take_ip) && (alu_wait_req || (alu_mem_stall /*&& mem_instr != NOP*/) );
-        id_alu_bubble = alu_take_ip || (!id_alu_stall && id_wait_req);
+        id_alu_stall = (! (mem_csr_take_ip || alu_take_ip)) && (alu_wait_req || (alu_mem_stall /*&& mem_instr != NOP*/) );
+        id_alu_bubble = mem_csr_take_ip || alu_take_ip || (!id_alu_stall && id_wait_req);
 
-        if_id_stall = (!alu_take_ip) && (id_wait_req || (id_alu_stall /*&& alu_instr != NOP*/) );
-        if_id_bubble = alu_take_ip || (!if_id_stall && if_wait_req);
+        if_id_stall = (! (mem_csr_take_ip || alu_take_ip)) && (id_wait_req || (id_alu_stall /*&& alu_instr != NOP*/) );
+        if_id_bubble = mem_csr_take_ip || alu_take_ip || (!if_id_stall && if_wait_req);
 
-        pre_if_stall = (!alu_take_ip) && if_id_stall;
+        pre_if_stall = (! (mem_csr_take_ip || alu_take_ip)) && if_id_stall;
     end
 
 endmodule

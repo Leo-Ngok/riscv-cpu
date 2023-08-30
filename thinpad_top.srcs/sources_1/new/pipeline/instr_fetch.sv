@@ -56,3 +56,26 @@ module next_instr_ptr(
         endcase
     end 
 endmodule
+
+module ip_mux(
+    input wire csr_modif,
+    input wire alu_modif,
+
+    input wire [31:0] csr_ip,
+    input wire [31:0] alu_ip,
+    input wire [31:0] pred_ip,
+
+    output wire [31:0] res_ip
+);
+    reg [31:0] res_ip_comb;
+    always_comb begin
+        if(csr_modif) begin
+            res_ip_comb = csr_ip;
+        end else if(alu_modif) begin
+            res_ip_comb = alu_ip;
+        end else begin
+            res_ip_comb = pred_ip;
+        end
+    end
+    assign res_ip = res_ip_comb;
+endmodule
