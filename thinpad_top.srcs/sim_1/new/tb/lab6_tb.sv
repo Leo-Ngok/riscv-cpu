@@ -38,8 +38,8 @@ module lab6_tb;
   wire uart_tsre;  // 数据发送完毕标志
 
   // Windows 需要注意路径分隔符的转义，例如 "D:\\foo\\bar.bin"
-  parameter BASE_RAM_INIT_FILE = "D:\\github\\THU_PASS\\Organization\\asm_debug\\lab6_test.bin";//\\base_test_new.bin"; //"/tmp/main.bin";//"/tmp/main.bin"; // BaseRAM 初始化文件，请修改为实际的绝对路径
-  parameter EXT_RAM_INIT_FILE = "/tmp/eram.bin";  // ExtRAM 初始化文件，请修改为实际的绝对路径
+  parameter BASE_RAM_INIT_FILE = "D:\\downloads\\kernel-rv32.bin";//"D:\\github\\THU_PASS\\Organization\\asm_debug\\lab6_test.bin";//\\base_test_new.bin"; //"/tmp/main.bin";//"/tmp/main.bin"; // BaseRAM 初始化文件，请修改为实际的绝对路�?
+  parameter EXT_RAM_INIT_FILE = "/tmp/eram.bin";  // ExtRAM 初始化文件，请修改为实际的绝对路�?
 
   initial begin
     // 在这里可以自定义测试输入序列，例如：
@@ -138,7 +138,8 @@ module lab6_tb;
     push_btn = 1;
     # 10000
     push_btn = 0;
-
+    # 10000
+    uart.pc_send_byte(8'h52);
     #10000 $finish;
   end
 

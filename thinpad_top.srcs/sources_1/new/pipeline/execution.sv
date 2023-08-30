@@ -84,13 +84,14 @@ endmodule
 
 module adjust_ip(
     input wire [31:0] instr,
-    input wire [31:0] cmp_res,
+    input wire [31:0] cmp_res, // From ALU, refer to ALU in how it handles JALR.
     input wire has_pred_jump,
     input wire [31:0] curr_ip,
     output reg        take_ip,
     output reg [31:0] new_ip
 );
     always_comb begin
+        // Branch instructions.
         if(instr[6:0] == 7'b1100011) begin
             if(cmp_res[0] != has_pred_jump) begin
                 take_ip = 1'b1;
@@ -114,9 +115,47 @@ module adjust_ip(
                 new_ip = 32'b0;
                 take_ip = 1'b0;
             end
+            // JALR instruction.
+            // Note: ret = JALR, x0, 0(x1) 
+            // Remember, in CSAPP, ret has to bubble out everything after it.
+            // ISA p. 16
+            // https://stackoverflow.com/questions/59150608/offset-address-for-jal-and-jalr-instrctions-in-risc-v
+            // Handle jump only, link part is in link_modif.
+        end else if(instr[6:0] == 7'b110_0111) begin
+            take_ip = 1'b1;
+            new_ip = (cmp_res + {{20{instr[31]}}, instr[31:20]}) & ~(32'b1);
         end else begin
             take_ip = 1'b0;
             new_ip = curr_ip + 32'd4;
         end
+    end
+endmodule
+
+module link_modif(
+    input wire [31:0] instr,
+    input wire [31:0] curr_ip,
+    input wire [31:0] alu_out,
+    output reg [31:0] wb_wdata
+);
+    parameter AUIPC= 32'b????_????_????_????_????_????_?001_0111;
+    parameter JAL  = 32'b????_????_????_????_????_????_?110_1111;
+    parameter JALR = 32'b????_????_????_????_????_????_?110_0111;
+    always_comb begin
+        casez(instr)
+        AUIPC: begin
+            wb_wdata = curr_ip + { instr[31:12], 12'b0 };
+        end
+        // Jump part is handled by predictor and ip correction. 
+        // Here handles the link part, i.e. the return address. 
+        JAL: begin
+            wb_wdata = curr_ip + 32'd4;
+        end
+        JALR: begin
+            wb_wdata = curr_ip + 32'd4;
+        end
+        default: begin
+            wb_wdata = alu_out;
+        end
+        endcase
     end
 endmodule

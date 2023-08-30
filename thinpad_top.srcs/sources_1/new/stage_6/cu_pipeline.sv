@@ -40,7 +40,7 @@ module cu_pipeline (
     output wire [15:0] curr_ip_out
 );
     parameter INSTR_BASE_ADDR = 32'h8000_0000;
-    assign curr_ip_out = id_ip;
+    //assign curr_ip_out = id_ip;
     // Pre - IF
     wire [31:0] pre_if_ip;
     // IF
@@ -84,7 +84,7 @@ module cu_pipeline (
 
     wire [31:0] alu_mwdata_adjusted;
     wire [ 3:0] alu_mbe_adjusted;
-
+    wire [31:0] alu_wbdata_adjusted;
     // MEM
     // From ALU stage
     wire [31:0] mem_instr;
@@ -109,7 +109,7 @@ module cu_pipeline (
     wire [31:0] wb_data;
     
     // IF
-    assign dau_instr_re_o = !(mem_mwe || mem_mre);
+    assign dau_instr_re_o = 1'b1;//!(mem_mwe || mem_mre);
     assign dau_instr_addr_o = pre_if_ip;
     next_instr_ptr ip_predict(
         .mem_ack(),
@@ -141,7 +141,7 @@ module cu_pipeline (
 
         .alu_we(alu_wbwe),
         .alu_waddr(alu_wbaddr),
-        .alu_wdata(alu_out),
+        .alu_wdata(alu_wbdata_adjusted),
 
         .mem_we(mem_wbwe),
         .mem_waddr(mem_wbaddr),
@@ -176,7 +176,12 @@ module cu_pipeline (
         .out_data(alu_mwdata_adjusted),
         .out_be(alu_mbe_adjusted)
     );
-
+    link_modif handle_link(
+        .instr(alu_instr),
+        .curr_ip(alu_ip),
+        .alu_out(alu_out),
+        .wb_wdata(alu_wbdata_adjusted)
+    );
     // MEM
     assign dau_we_o    = mem_mwe;
     assign dau_re_o    = mem_mre;
@@ -207,6 +212,7 @@ module cu_pipeline (
     assign rf_waddr = wb_addr;
     assign rf_wdata = wb_data;
 
+    wire pre_if_stall;
     wire if_id_stall;
     wire id_ex_stall;
     wire ex_mem_stall;
@@ -233,6 +239,8 @@ module cu_pipeline (
         .mem_waddr(mem_wbaddr),
         .mem_ack  (~mem_pause),
 
+        .pre_if_stall(pre_if_stall),
+
         .if_id_stall (if_id_stall ),
         .if_id_bubble(if_id_bubble),
 
@@ -246,7 +254,7 @@ module cu_pipeline (
         .mem_wb_bubble(mem_wb_bubble)
     );
 
-    wire pre_if_stall = !(dau_instr_ack_i || alu_take_ip);
+    // = !(dau_instr_ack_i || alu_take_ip);
     wire [31:0] next_ip = alu_take_ip ? alu_new_ip : next_ip_pred;
     pre_if ppl_pre_if(
         .clock(clk),
@@ -354,7 +362,7 @@ module cu_pipeline (
         .ex_wraddr (alu_wbaddr),
         .mem_wraddr(mem_wbaddr),
 
-        .ex_wdata (alu_out),
+        .ex_wdata (alu_wbdata_adjusted),
         .mem_wdata(mem_wbdata)
 
     );
@@ -397,6 +405,8 @@ module cu_orchestra(
     input wire [31:0] mem_instr,
     input wire [ 4:0] mem_waddr,
     input wire        mem_ack,
+
+    output reg pre_if_stall,
 
     output reg if_id_stall,
     output reg if_id_bubble,
@@ -472,6 +482,8 @@ module cu_orchestra(
 
         if_id_stall = (!alu_take_ip) && (id_wait_req || (id_alu_stall /*&& alu_instr != NOP*/) );
         if_id_bubble = alu_take_ip || (!if_id_stall && if_wait_req);
+
+        pre_if_stall = (!alu_take_ip) && if_id_stall;
     end
 
 endmodule

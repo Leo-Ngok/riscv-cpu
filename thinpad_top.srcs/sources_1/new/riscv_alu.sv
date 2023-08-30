@@ -6,6 +6,9 @@ module riscv_alu(
 );
     // Miscellaneous
     parameter  LUI = 32'b????_????_????_????_????_????_?011_0111; // BASE
+    parameter AUIPC= 32'b????_????_????_????_????_????_?001_0111;
+    parameter JAL  = 32'b????_????_????_????_????_????_?110_1111;
+    parameter JALR = 32'b????_????_????_????_????_????_?110_0111;
     // B-Type: Branch instructions.
     // +--------------+-----+-----+--------+-------------+--------+
     // | imm[12|10:5] | rs2 | rs1 | funct3 | imm[4:1|11] | opcode |
@@ -97,46 +100,80 @@ module riscv_alu(
     parameter  SRA = 32'b0100_000?_????_????_?101_????_?011_0011;
     parameter   OR = 32'b0000_000?_????_????_?110_????_?011_0011;
     parameter  AND = 32'b0000_000?_????_????_?111_????_?011_0011;
-    
-    
-    always_comb begin
-        casez (opcode)
-             LUI: out <= { opcode[31:12], 12'b0 };
 
-             BEQ: out <= (in_1 == in_2) ? 32'b1 : 32'b0;
-             BNE: out <= (in_1 != in_2) ? 32'b1 : 32'b0;
-             BLT: out <= ($signed(in_1)  < $signed(in_2)) ? 32'b1 : 32'b0;
-             BGE: out <= ($signed(in_1) >= $signed(in_2)) ? 32'b1 : 32'b0;
-             BLTU: out <= (in_1  < in_2) ? 32'b1 : 32'b0;
-             BGEU: out <= (in_1 >= in_2) ? 32'b1 : 32'b0;
+    parameter XPERM8 = 32'b0010100_?????_?????_100_?????_0110011;
+    reg [7:0] i1, i2, i3, i4;
+    always_comb begin
+        i1 = 0;
+        i2 = 0;
+        i3 = 0;
+        i4 = 0;
+        out = 32'b0;
+        casez (opcode)
+             LUI: out = { opcode[31:12], 12'b0 };
+            AUIPC: out = 32'b0; // It is not our duty to calculate pc + offset, it is link_modif's job (in execution.sv).
+             JAL: out = 32'b0; // No, it is again not our duty.
+             JALR: out = in_1; // Give this value to IP correction module, to update next instruction pointer. 
+             BEQ: out = (in_1 == in_2) ? 32'b1 : 32'b0;
+             BNE: out = (in_1 != in_2) ? 32'b1 : 32'b0;
+             BLT: out = ($signed(in_1)  < $signed(in_2)) ? 32'b1 : 32'b0;
+             BGE: out = ($signed(in_1) >= $signed(in_2)) ? 32'b1 : 32'b0;
+             BLTU: out = (in_1  < in_2) ? 32'b1 : 32'b0;
+             BGEU: out = (in_1 >= in_2) ? 32'b1 : 32'b0;
               //LB: out <= in_1 + { 19'b0, opcode[31], opcode[7], opcode[30:25], opcode[11:8], 1'b0 };
              
              
-             LOAD : out <= in_1 + { 20'b0, opcode[31:20] };
-             STORE: out <= in_1 + { 20'b0, opcode[31:25], opcode[11:7] };
+             LOAD : out = in_1 + { {20{opcode[31]}}, opcode[31:20] };
+             STORE: out = in_1 + { {20{opcode[31]}}, opcode[31:25], opcode[11:7] };
             
-            ADDI: out <= in_1 + { 20'b0, opcode[31:20] };
-            SLTI: out <= ($signed(in_1)  < $signed({ 20'b0, opcode[31:20] })) ? 32'b1 : 32'b0;
-            SLTIU: out <= (in_1  < { 20'b0, opcode[31:20] }) ? 32'b1 : 32'b0;
-            XORI: out <= in_1 ^ { 20'b0, opcode[31:20] };
-             ORI: out <= in_1 | { 20'b0, opcode[31:20] };
-            ANDI: out <= in_1 & { 20'b0, opcode[31:20] };
+            ADDI: out = in_1 + { {20{opcode[31]}}, opcode[31:20] };
+            SLTI: out = ($signed(in_1)  < $signed({ {20{opcode[31]}}, opcode[31:20] })) ? 32'b1 : 32'b0;
+            SLTIU: out = (in_1  < { {20{opcode[31]}}, opcode[31:20] }) ? 32'b1 : 32'b0;
+            XORI: out = in_1 ^ { {20{opcode[31]}}, opcode[31:20] };
+             ORI: out = in_1 | { {20{opcode[31]}}, opcode[31:20] };
+            ANDI: out = in_1 & { {20{opcode[31]}}, opcode[31:20] };
 
-            SLLI: out <= in_1 << opcode[24:20]; 
-            SRLI: out <= in_1 >> opcode[24:20];
-            SRAI: out <= $signed(in_1) >>> opcode[24:20]; 
+            SLLI: out = in_1 << opcode[24:20]; 
+            SRLI: out = in_1 >> opcode[24:20];
+            SRAI: out = $signed(in_1) >>> opcode[24:20]; 
 
-             ADD: out <= in_1 + in_2;
-             SUB: out <= in_1 - in_2;
-             SLL: out <= in_1 << in_2[4:0];
-             SLT: out <= ($signed(in_1)  < $signed(in_2)) ? 32'b1 : 32'b0;
-            SLTU: out <= (in_1  < in_2) ? 32'b1 : 32'b0;
-             XOR: out <= in_1 ^ in_2;
-             SRL: out <= in_1 >> in_2[4:0];
-             SRA: out <= $signed(in_1) >>> in_2[4:0];
-              OR: out <= in_1 | in_2;
-             AND: out <= in_1 & in_2;
-            default: out <= 32'b0;
+             ADD: out = in_1 + in_2;
+             SUB: out = in_1 - in_2;
+             SLL: out = in_1 << in_2[4:0];
+             SLT: out = ($signed(in_1)  < $signed(in_2)) ? 32'b1 : 32'b0;
+            SLTU: out = (in_1  < in_2) ? 32'b1 : 32'b0;
+             XOR: out = in_1 ^ in_2;
+             SRL: out = in_1 >> in_2[4:0];
+             SRA: out = $signed(in_1) >>> in_2[4:0];
+              OR: out = in_1 | in_2;
+             AND: out = in_1 & in_2;
+             XPERM8: begin
+            i1 = in_2[ 7: 0];
+            i2 = in_2[15: 8];
+            i3 = in_2[23:16];
+            i4 = in_2[31:24];
+            if(i1 < 8'd4) begin
+                out[7:0] = in_1[8*i1+:8];
+            end else begin
+                out[7:0] = 8'b0;
+            end
+            if(i2 < 8'd4) begin
+                out[15:8] = in_1[8*i2+:8];
+            end else begin
+                out[15:8] = 8'b0;
+            end
+            if(i3 < 8'd4) begin
+                out[23:16] = in_1[8*i3+:8];
+            end else begin
+                out[23:16] = 8'b0;
+            end
+            if(i4 < 8'd4) begin
+                out[31:24] = in_1[8*i4+:8];
+            end else begin
+                out[31:24] = 8'b0;
+            end
+            end
+            default: out = 32'b0;
         endcase
     end
 endmodule

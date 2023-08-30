@@ -318,7 +318,7 @@ module dau_i_d (
     logic wbs0_we_o;
 
     wb_arbiter_2 #(
-        .ARB_LSB_HIGH_PRIORITY(0)
+        .ARB_LSB_HIGH_PRIORITY(1)
     ) base_sram_arbiter(
         .clk(sys_clk),
         .rst(sys_rst),
@@ -376,7 +376,7 @@ module dau_i_d (
     logic wbs1_we_o;
 
     wb_arbiter_2 #(
-        .ARB_LSB_HIGH_PRIORITY(0)
+        .ARB_LSB_HIGH_PRIORITY(1)
     ) ext_sram_arbiter(
         .clk(sys_clk),
         .rst(sys_rst),
@@ -433,7 +433,7 @@ module dau_i_d (
     logic wbs2_we_o;
 
     wb_arbiter_2 #(
-        .ARB_LSB_HIGH_PRIORITY(0)
+        .ARB_LSB_HIGH_PRIORITY(1)
     ) uart_arbiter(
         .clk(sys_clk),
         .rst(sys_rst),

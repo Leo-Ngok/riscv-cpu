@@ -62,11 +62,12 @@ module wb_arbiter_2 #
 
 wire [1:0] request;
 wire [1:0] grant;
-wire grant_valid;
+wire grant_valid = 1;
 
 assign request[0] = wbm0_cyc_i;
 assign request[1] = wbm1_cyc_i;
-
+assign grant[0] = wbm0_cyc_i;
+assign grant[1] = (!wbm0_cyc_i) && wbm1_cyc_i;
 wire wbm0_sel = grant[0] & grant_valid;
 wire wbm1_sel = grant[1] & grant_valid;
 
@@ -108,7 +109,7 @@ assign wbs_cyc_o = wbm0_sel ? 1'b1 :
                    1'b0;
 
 // arbiter instance
-arbiter #(
+/*arbiter #(
     .PORTS(2),
     .ARB_TYPE_ROUND_ROBIN(ARB_TYPE_ROUND_ROBIN),
     .ARB_BLOCK(1),
@@ -123,6 +124,6 @@ arb_inst (
     .grant(grant),
     .grant_valid(grant_valid),
     .grant_encoded()
-);
+);*/
 
 endmodule

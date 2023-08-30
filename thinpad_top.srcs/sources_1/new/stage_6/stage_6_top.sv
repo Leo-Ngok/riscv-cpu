@@ -123,18 +123,23 @@ module stage_6_top (
   assign uart_rdn = 1'b1;
   assign uart_wrn = 1'b1;
 
-  wire dau_we;
-  wire dau_re;
+  wire        dau_we;
+  wire        dau_re;
   wire [31:0] dau_addr;
   wire [ 3:0] dau_byte_en;
   wire [31:0] dau_data_write;
   wire [31:0] dau_data_read;
-  wire dau_ack;
+  wire        dau_ack;
   
-  wire dau_instr_re;
+  wire        dau_instr_re;
   wire [31:0] dau_instr_addr;
   wire [31:0] dau_instr_data;
-  wire dau_instr_ack;
+  wire        dau_instr_ack;
+
+  wire        i_cache_re;
+  wire [31:0] i_cache_addr;
+  wire [31:0] i_cache_data;
+  wire [31:0] i_cache_ack;
 
   parameter ADDR_WIDTH = 5;
   parameter DATA_WIDTH = 32;
@@ -154,6 +159,21 @@ module stage_6_top (
   wire [DATA_WIDTH - 1 : 0] alu_out;
 
   wire step;
+  instr_cache icache(
+    .clock(sys_clk),
+    .reset(sys_rst),
+    
+    // TO CU.
+    .ire  (i_cache_re),
+    .iaddr(i_cache_addr),
+    .iack (i_cache_ack),
+    .idata(i_cache_data),
+    // TO DAU
+    .dau_ire  (dau_instr_re),
+    .dau_iaddr(dau_instr_addr), 
+    .dau_iack (dau_instr_ack),
+    .dau_idata(dau_instr_data)
+  );
 
   dau_i_d __dau(
     .sys_clk(sys_clk),
@@ -224,10 +244,16 @@ module stage_6_top (
     .clk(sys_clk),
     .rst(sys_rst),
     
-    .dau_instr_re_o  (dau_instr_re  ),
+    /*.dau_instr_re_o  (dau_instr_re  ),
     .dau_instr_addr_o(dau_instr_addr),
     .dau_instr_data_i(dau_instr_data),
-    .dau_instr_ack_i (dau_instr_ack ),
+    .dau_instr_ack_i (dau_instr_ack ),*/
+    
+    .dau_instr_re_o  (i_cache_re),
+    .dau_instr_addr_o(i_cache_addr),
+    .dau_instr_ack_i (i_cache_ack),
+    .dau_instr_data_i(i_cache_data),
+
 
     .dau_we_o   (dau_we        ),
     .dau_re_o   (dau_re        ),
