@@ -60,6 +60,7 @@ module cu_pipeline (
 
     wire       decoder_mre;
     wire       decoder_mwe;
+    wire       decoder_csracc;
     wire [31:0] id_mux_alu_op1;
     wire [31:0] id_mux_alu_op2;
     // ALU
@@ -75,6 +76,9 @@ module cu_pipeline (
     wire        alu_mre;
     wire [31:0] alu_mwdata;
 
+    wire        alu_csracc;
+    wire [31:0] alu_csrdata;
+
     wire        alu_wbwe;
     wire [ 4:0] alu_wbaddr;
 
@@ -88,12 +92,16 @@ module cu_pipeline (
     // MEM
     // From ALU stage
     wire [31:0] mem_instr;
+    wire [31:0] mem_ip;
 
     wire        mem_mwe;
     wire        mem_mre;
     wire [ 3:0] mem_mbe;
     wire [31:0] mem_addr;
     wire [31:0] mem_data;
+
+    wire        mem_csracc;
+    wire [31:0] mem_csrdt;
 
     wire        mem_wbwe;
     wire [ 4:0] mem_wbaddr;
@@ -103,6 +111,8 @@ module cu_pipeline (
     wire [31:0] mem_mrdata_adjusted;
     wire [31:0] mem_rf_wdata;
     wire        mem_pause;
+
+    wire [31:0] mem_csrwb;
     // WB
     wire        wb_we;
     wire [ 4:0] wb_addr;
@@ -129,7 +139,8 @@ module cu_pipeline (
         .we   (decoder_we),
 
         .mem_re(decoder_mre),
-        .mem_we(decoder_mwe)
+        .mem_we(decoder_mwe),
+        .csr_acc(decoder_csracc)
     );
 
     instr_mux comb_instr_mux(
@@ -198,14 +209,29 @@ module cu_pipeline (
     rf_write_data_mux rf_wdata_mux(
         .rf_we(mem_wbwe),
         .mem_re(mem_mre),
+        .csr_acc(mem_csracc),
+
         .alu_data(mem_wbdata),
         .mem_data(mem_mrdata_adjusted),
+        .csr_data(mem_csrwb),
+        
         .out_data(mem_rf_wdata)
     );
     devacc_pause device_access_pause(
         .mem_instr(mem_instr),
         .dau_ack(dau_ack_i),
         .pause_o(mem_pause)
+    );
+    csr csr_inst(
+        .clock(clk),
+        .reset(rst),
+
+        .instr(mem_instr),
+        .wdata(mem_csrdt),
+        .rdata(mem_csrwb),
+
+        .curr_ip(mem_ip),
+        .timer_interrupt(1'b0) // TODO
     );
     // WB
     assign rf_we    = wb_we;
@@ -319,6 +345,12 @@ module cu_pipeline (
         .id_mdata(id_mux_alu_op2), // Note that this bus is used only in STORE instructions.
         .ex_mdata(alu_mwdata),
 
+        .id_csracc(decoder_csracc),
+        .ex_csracc(alu_csracc),
+
+        .id_csrdata(id_mux_alu_op1),
+        .ex_csrdata(alu_csrdata),
+
         // Metadata for write back stage.
         .id_we(decoder_we),
         .ex_we(alu_wbwe),
@@ -339,21 +371,30 @@ module cu_pipeline (
         .ex_instr (alu_instr),
         .mem_instr(mem_instr),
         
+        .ex_ip(alu_ip),
+        .mem_ip(mem_ip), 
+
         // Part 1: Input for DAU
-        .ex_mre(alu_mre),
+        .ex_mre (alu_mre),
         .mem_mre(mem_mre),
 
-        .ex_mwe(alu_mwe),
+        .ex_mwe (alu_mwe),
         .mem_mwe(mem_mwe),
 
-        .ex_mbe(alu_mbe_adjusted),
+        .ex_mbe (alu_mbe_adjusted),
         .mem_mbe(mem_mbe),
 
-        .ex_maddr(alu_out), // we always calculate sum of base and offset for mem address
+        .ex_maddr (alu_out), // we always calculate sum of base and offset for mem address
         .mem_maddr(mem_addr),
 
-        .ex_mdata(alu_mwdata_adjusted),
+        .ex_mdata (alu_mwdata_adjusted),
         .mem_mdata(mem_data),
+
+        .ex_csracc(alu_csracc),
+        .mem_csracc(mem_csracc),
+
+        .ex_csrdt (alu_op1),
+        .mem_csrdt(mem_csrdt),
 
         // Part 2: Metadata for next stage.
         .ex_we (alu_wbwe),
@@ -466,6 +507,9 @@ module cu_orchestra(
         ) || (
             mem_instr[6:0] == 7'b000_0011 && !mem_ack &&
             (mem_waddr == id_raddr1 || mem_waddr == id_raddr2)
+        ) || ( // CSR Related writes
+            alu_instr[6:0] == 7'b1110011 && alu_instr[14:12] > 0 &&
+            (alu_waddr == id_raddr1 || alu_waddr == id_raddr2)
         );
 
         // Case 3. Determined by alu_take_ip

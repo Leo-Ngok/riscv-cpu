@@ -2,30 +2,41 @@ module csr(
     input wire clock,
     input wire reset,
 
-    input wire re,
-    input wire [11:0] rdaddr,
-    output wire [31:0] rdata,
+    input  wire [31:0] instr,
+    input  wire [31:0] wdata,  // DATA That WRITES TO CSR (usually FROM GP register files)
+    output wire [31:0] rdata, // DATA that READS FROM CSR (writes to GP register files)
 
-    input wire we,
-    input wire [11:0] wraddr,
-    input wire [31:0] wrdata
+    input  wire [31:0] curr_ip, // Set MEPC
+    input  wire        timer_interrupt // TIME'S UP!
 );
+
+    /* Let's do these first.
+    还需要实现 CSR 寄存器的这些字段：
+    1. mtvec: BASE, MODE
+    2. mscratch
+    3. mepc
+    4. mcause: Interrupt, Exception Code
+    5. mstatus: MPP(12:11)
+    6. mie: MTIE(7)
+    7. mip: MTIP(7)
+    */
+
     // MACHINE INFORMATION REGISTERS
     reg [31:0] mhartid;  // 0XF14, Hardware thread ID
 
     // MACHINE TRAP SETUP
-    reg [31:0] mstatus;  // 0X300, Machine status register.
+    reg [31:0] mstatus;  // 0X300, Machine status register. (MONITOR)
     reg [31:0] medeleg;  // 0X302, Machine exception delegation register.
     reg [31:0] mideleg;  // 0X303, Machine interrupt delegation register.
-    reg [31:0] mie;      // 0X304, Machine interrupt-enable register.
-    reg [31:0] mtvec;    // 0X305, Machine trap-handler base address.
+    reg [31:0] mie;      // 0X304, Machine interrupt-enable register. (MONITOR)
+    reg [31:0] mtvec;    // 0X305, Machine trap-handler base address. (MONITOR)
 
     // MACHINE TRAP HANDLING
-    reg [31:0] mscratch; // 0X340, Scratch register for machine trap handlers.
-    reg [31:0] mepc;     // 0X341, Machine exception program counter.
-    reg [31:0] mcause;   // 0X342, Machine trap cause.
+    reg [31:0] mscratch; // 0X340, Scratch register for machine trap handlers. (MONITOR)
+    reg [31:0] mepc;     // 0X341, Machine exception program counter. (MONITOR)
+    reg [31:0] mcause;   // 0X342, Machine trap cause. (MONITOR)
     reg [31:0] mtval;    // 0X343, Machine bad address or instruction.
-    reg [31:0] mip;      // 0X344, Machine interrupt pending.
+    reg [31:0] mip;      // 0X344, Machine interrupt pending. (MONITOR)
 
     // SUPERVISOR TRAP SETUP
     reg [31:0] sstatus;  // 0X100, Supervisor status register.
@@ -48,9 +59,73 @@ module csr(
     reg [63:0] mtime;
     reg [63:0] mtimecmp;
 
+    parameter SYSTEM = 32'b????_????_????_????_????_????_?1110011;
+    parameter CSRRW  = 32'b????_????_????_?????_001_?????_1110011;
+    parameter CSRRS  = 32'b????_????_????_?????_010_?????_1110011;
+    parameter CSRRC  = 32'b????_????_????_?????_011_?????_1110011;
+    parameter CSRRWI = 32'b????_????_????_?????_101_?????_1110011;
+    parameter CSRRSI = 32'b????_????_????_?????_110_?????_1110011;
+    parameter CSRRCI = 32'b????_????_????_?????_111_?????_1110011;
+
+    
+    reg [31:0] rdata_comb;
+
+    wire [11:0] address = instr[31:20]; // Refer to ISA ZICSR
+
+    // READS OUT ORIGINAL CSR VALUES
+    always_comb begin
+        case(address) 
+        12'h300: rdata_comb = mstatus;
+        12'h304: rdata_comb = mie;
+        12'h305: rdata_comb = mtvec;
+        12'h340: rdata_comb = mscratch;
+        12'h341: rdata_comb = mepc;
+        12'h342: rdata_comb = mcause;
+        12'h343: rdata_comb = mtval;
+        12'h344: rdata_comb = mip; 
+        // no, you should always 'handle' interrupt first.
+        12'h180: rdata_comb = satp;
+        default: rdata_comb = 32'b0;
+        endcase
+    end
+
+    assign rdata = rdata_comb;
+
+    reg [31:0] wdata_comb;
+    reg [31:0] wdata_internal;
+    // SETS NEW CSR VALUES WHERE APPROPRIATE
+    always_comb begin
+        wdata_internal = (instr[14]) ? {27'b0, instr[19:15]} : wdata; 
+        case(address) 
+        // mstatus: MPP only for monitor
+        12'h300: wdata_comb = {mstatus[31:13], wdata_internal[12:11], mstatus[10:0]};
+        // mie: MTIE only for monitor
+        12'h304: wdata_comb = {mie    [31: 8], wdata_internal[  7  ], mie    [ 6:0]};
+        // mtvec
+        12'h305: wdata_comb = wdata_internal;
+
+        // mscratch
+        12'h340: wdata_comb = wdata_internal;
+        // mepc
+        12'h341: wdata_comb = wdata_internal;
+        // mcause
+        12'h342: wdata_comb = wdata_internal;
+        // mtval
+        12'h343: wdata_comb = wdata_internal;
+        // mip: MTIP only for monitor
+        12'h344: wdata_comb = {mip    [31: 8], wdata_internal[  7  ], mip    [ 6:0]};
+        12'h180: wdata_comb = wdata_internal;
+        default: wdata_comb = 32'b0;
+        endcase
+    end
+
     always_ff @(posedge reset or posedge clock) begin
         if(reset) begin
+            mhartid <= 32'b0;
+
             mstatus <= 32'b0;
+            medeleg <= 32'b0;
+            mideleg <= 32'b0;
             mie     <= 32'b0;
             mtvec   <= 32'b0;
 
@@ -59,52 +134,65 @@ module csr(
             mcause  <= 32'b0;
             mtval   <= 32'b0;
             mip     <= 32'b0;
+            
+            sstatus <= 32'b0;
+            sie     <= 32'b0;
+            stvec   <= 32'b0;
+            
+            sscratch<= 32'b0;
+            sepc    <= 32'b0;
+            scause  <= 32'b0;
+            stval   <= 32'b0;
+            sip     <= 32'b0;
 
             satp    <= 32'b0;
+
         end else begin
-            if(we) begin
-                case(address)
-                /*
-                还需要实现 CSR 寄存器的这些字段：
+            casez(instr)
+            CSRRW, CSRRWI: begin
+                case(address) 
+                12'h300: mstatus    <= wdata_comb;
+                12'h304: mie        <= wdata_comb;
+                12'h305: mtvec      <= wdata_comb;
 
-                1. mtvec: BASE, MODE
-                2. mscratch
-                3. mepc
-                4. mcause: Interrupt, Exception Code
-                5. mstatus: MPP
-                6. mie: MTIE
-                7. mip: MTIP
-                */
-                12'h300: mstatus[12:11] <= wrdata[12:11];
-                12'h304: mie[7]     <= wrdata[7];
-                12'h305: mtvec      <= wrdata;
-
-                12'h340: mscratch   <= wrdata;
-                12'h341: mepc       <= wrdata;
-                12'h342: mcause     <= wrdata;
-                12'h343: mtval      <= wrdata;
-                
-                12'h180: satp       <= wrdata;
+                12'h340: mscratch   <= wdata_comb;
+                12'h341: mepc       <= wdata_comb;
+                12'h342: mcause     <= wdata_comb;
+                12'h343: mtval      <= wdata_comb;
+                12'h344: mip        <= wdata_comb;
+                12'h180: satp       <= wdata_comb;
                 endcase
-            end 
+            end
+            CSRRS, CSRRSI: begin
+                case(address) 
+                12'h300: mstatus    <= mstatus | wdata_comb;
+                12'h304: mie        <= mie     | wdata_comb;
+                12'h305: mtvec      <= mtvec   | wdata_comb;
 
+                12'h340: mscratch   <= mscratch| wdata_comb;
+                12'h341: mepc       <= mepc    | wdata_comb;
+                12'h342: mcause     <= mcause  | wdata_comb;
+                12'h343: mtval      <= mtval   | wdata_comb;
+                12'h344: mip        <= mip     | wdata_comb;
+                12'h180: satp       <= satp    | wdata_comb;
+                endcase
+            end
+            CSRRC, CSRRCI: begin
+                case(address) 
+                12'h300: mstatus    <= mstatus & ~wdata_comb;
+                12'h304: mie        <= mie     & ~wdata_comb;
+                12'h305: mtvec      <= mtvec   & ~wdata_comb;
+
+                12'h340: mscratch   <= mscratch& ~wdata_comb;
+                12'h341: mepc       <= mepc    & ~wdata_comb;
+                12'h342: mcause     <= mcause  & ~wdata_comb;
+                12'h343: mtval      <= mtval   & ~wdata_comb;
+                12'h344: mip        <= mip     & ~wdata_comb;
+                12'h180: satp       <= satp    & ~wdata_comb;
+                endcase
+            end
+            endcase
         end
-    end
-    reg [31:0] rdata_reg;
-    always_comb begin
-        case(address) 
-        12'h300: rdata_reg = mstatus;
-        12'h304: rdata_reg = mie;
-        12'h305: rdata_reg = mtval;
-        12'h340: rdata_reg = mscratch;
-        12'h341: rdata_reg = mepc;
-        12'h342: rdata_reg = mcause;
-        12'h343: rdata_reg = mtval;
-        12'h344: rdata_reg = 32'b0; 
-        // no, you should always 'handle' interrupt first.
-        12'h180: rdata_reg = satp;
-        default: rdata_reg = 32'b0;
-        endcase
     end
 
     // WPRI 
@@ -143,7 +231,7 @@ module csr(
     // previous privilege mode
     // WLRL
     wire spp = mstatus[8];      
-    wire [1:0] mpp  = mstatus[12:11]; 
+    wire [1:0] mpp  = mstatus[12:11];  // MONITOR
     // when running xret:
     // suppose y = xPP, then 
     // xIE <- xPIE;
@@ -173,7 +261,7 @@ module csr(
     // when set, ...
     wire tw = mstatus[21];
 
-    // trap sret
+    // trap sret, permits supervisor return
     // augmented virtualization mechanism
     wire tsr = mstatus[22];
     wire sd = mstatus[31];
@@ -181,7 +269,7 @@ module csr(
 
     // mtvec
     wire [29:0] base = mtvec[31:2];
-    wire [1:0] mode mtvec[1:0];
+    wire [1:0] mode  = mtvec[1:0];
 
     // Interrupt enable and pending...
     // For mip, 
@@ -199,7 +287,7 @@ module csr(
 
     wire utip = mip[4];
     wire stip = mip[5];
-    wire mtip = mip[7];
+    wire mtip = mip[7]; // MONITOR
 
     wire ueip = mip[8];
     wire seip = mip[9];
@@ -211,7 +299,7 @@ module csr(
 
     wire utie = mie[4];
     wire stie = mie[5];
-    wire mtie = mie[7];
+    wire mtie = mie[7]; // MONITOR
 
     wire ueie = mie[8];
     wire seie = mie[9];

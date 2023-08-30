@@ -7,9 +7,10 @@ module instr_decoder(
     output wire we,
 
     output wire mem_re,
-    output wire mem_we//,
+    output wire mem_we,
 
-    // output wire [3:0] mem_be: No, don't dotthis. Find write address first.
+    // output wire [3:0] mem_be: No, don't do this. Find write address first.
+    output wire csr_acc
 );
     parameter LUI    = 7'b0110111;
     parameter AUIPC  = 7'b0010111;
@@ -20,6 +21,7 @@ module instr_decoder(
     parameter STORE  = 7'b0100011;
     parameter ARITHI = 7'b0010011;
     parameter ARITH  = 7'b0110011;
+    parameter SYSTEM = 7'b1110011;
     // system operations not implemented yet.
     // TODO: Implement FENCE, ECALL, CSR* ...
 
@@ -53,6 +55,7 @@ module instr_decoder(
 
     assign mem_re = opcode == LOAD;
     assign mem_we = opcode == STORE;
+    assign csr_acc = opcode == SYSTEM && instr[14:12] != 3'b0;
 endmodule
 
 module instr_mux(

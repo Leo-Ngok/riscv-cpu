@@ -103,6 +103,12 @@ module id_ex(
     input wire [31:0] id_mdata,
     output reg [31:0] ex_mdata,
 
+    input wire        id_csracc,
+    output reg        ex_csracc,
+
+    input wire [31:0] id_csrdata,
+    output reg [31:0] ex_csrdata,
+
     // Metadata for Write back stage -- wrdata 
     // is calcuated in ALU stage, not our duty.
     input wire        id_we,
@@ -131,9 +137,11 @@ module id_ex(
             // ex_mbe      <=  4'b0;
             ex_mdata    <= 32'b0;
 
+            ex_csracc   <=  1'b0;
+            ex_csrdata  <= 32'b0;
             // 3. Write back
-            ex_we       <= 1'b1; // NOP is addi x0,x0,0
-            ex_wraddr   <= 5'b0;
+            ex_we       <=  1'b1; // NOP is addi x0,x0,0
+            ex_wraddr   <=  5'b0;
             error <= 1'b0;
         end else begin
             // error <= stall && bubble;
@@ -154,6 +162,8 @@ module id_ex(
                 // ex_mbe      <=  4'b0;
                 ex_mdata    <= 32'b0;
 
+                ex_csracc   <=  1'b0;
+                ex_csrdata  <= 32'b0;
                 // 3. Write back
                 ex_we       <=  1'b1;
                 ex_wraddr   <=  5'b0;
@@ -173,6 +183,9 @@ module id_ex(
                 ex_mwe      <= id_mwe;
                 // ex_mbe      <= id_mbe;
                 ex_mdata    <= id_mdata;
+
+                ex_csracc   <= id_csracc;
+                ex_csrdata  <= id_csrdata;
 
                 // 3. Write back
                 ex_we       <= id_we;
@@ -243,6 +256,9 @@ module ex_mem(
     input wire bubble,
     output reg error,
     
+    input wire [31:0]  ex_ip,
+    output reg [31:0] mem_ip,
+
     // Prepare for what DAU need.
     input wire [31:0]  ex_instr,
     output reg [31:0] mem_instr,
@@ -262,6 +278,13 @@ module ex_mem(
     input wire [31:0]  ex_mdata,
     output reg [31:0] mem_mdata,
     
+    // Prepare for trap handler.
+    input wire         ex_csracc,
+    output reg        mem_csracc,
+
+    input wire [31:0]  ex_csrdt,
+    output reg [31:0] mem_csrdt,
+
     // Metadata for next stage.
     input wire         ex_we,
     output reg        mem_we,
@@ -273,9 +296,11 @@ module ex_mem(
     output reg [31:0] mem_wdata
 );
     parameter NOP = 32'b0000_0000_0000_0000_0000_0000_0001_0011;
+    parameter INSTR_BASE_ADDR = 32'h8000_0000;
 
     always_ff @(posedge clock or posedge reset) begin
         if(reset) begin
+            mem_ip    <= INSTR_BASE_ADDR;
             // NOP = addi x0, x0, 0
             // 1. Device
             mem_mre    <=  1'b0;
@@ -283,6 +308,9 @@ module ex_mem(
             mem_mbe    <=  4'b0;
             mem_maddr  <= 32'b0;
             mem_mdata  <= 32'b0;
+
+            mem_csracc <= 1'b0;
+            mem_csrdt  <= 32'b0;
 
             // 2. Write back
             mem_we     <=  1'b1;
@@ -304,6 +332,9 @@ module ex_mem(
                 mem_maddr  <= 32'b0;
                 mem_mdata  <= 32'b0;
 
+                mem_csracc <= 1'b0;
+                mem_csrdt  <= 32'b0;
+
                 // 2. Write back
                 mem_we     <=  1'b1;
                 mem_wraddr <= 32'b0;
@@ -313,13 +344,16 @@ module ex_mem(
                 mem_instr  <=   NOP;
             end else if (!stall) begin
                 mem_instr  <= ex_instr;
-
+                mem_ip     <= ex_ip;
                 // 1. Device
                 mem_mre    <= ex_mre;
                 mem_mwe    <= ex_mwe;
                 mem_mbe    <= ex_mbe;
                 mem_maddr  <= ex_maddr;
                 mem_mdata  <= ex_mdata;
+
+                mem_csracc <= ex_csracc;
+                mem_csrdt  <= ex_csrdt;
 
                 // 2. Write back
                 mem_we     <= ex_we;

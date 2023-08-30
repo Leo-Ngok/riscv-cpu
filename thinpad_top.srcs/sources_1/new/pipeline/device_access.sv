@@ -62,14 +62,20 @@ endmodule
 module rf_write_data_mux(
     input wire rf_we,
     input wire mem_re,
+    input wire csr_acc,
+
     input wire [31:0] alu_data,
     input wire [31:0] mem_data,
+    input wire [31:0] csr_data, 
+
     output reg [31:0] out_data
 );
     always_comb begin
         if(rf_we) begin
             if(mem_re) begin
                 out_data = mem_data;
+            end else if(csr_acc) begin
+                out_data = csr_data;
             end else begin
                 out_data = alu_data;
             end
