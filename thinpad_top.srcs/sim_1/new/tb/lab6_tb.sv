@@ -138,9 +138,10 @@ module lab6_tb;
     push_btn = 1;
     # 10000
     push_btn = 0;
-    # 3000000
-    uart.pc_send_byte(8'h47); // G
+    # 3500000
+    uart.pc_send_byte(8'h47); // G = 47, T = 54
     // 0x800010a8 <UTEST_PUTC>
+    // 0x80001080 
     uart.pc_send_byte(8'ha8);
     uart.pc_send_byte(8'h10);
     uart.pc_send_byte(8'h00);

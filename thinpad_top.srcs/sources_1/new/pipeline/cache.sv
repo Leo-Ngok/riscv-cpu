@@ -48,14 +48,18 @@ endmodule
 module instr_cache(
     input wire clock,
     input wire reset,
+
+    input wire bypass,
+    input wire flush,
+
     // TO CU.
     input  wire        ire,
     input  wire [31:0] iaddr,
     output wire        iack,
     output wire [31:0] idata,
     // TO DAU
-    output reg        dau_ire,
-    output reg [31:0] dau_iaddr,
+    output wire        dau_ire,
+    output wire [31:0] dau_iaddr,
     input  wire        dau_iack,
     input  wire [31:0] dau_idata
 );
@@ -119,10 +123,6 @@ module instr_cache(
         end
     end
 
-    assign iack = cache_hit;
-    assign idata = iack ? (cache_regs[set_idx].way_arr[way_idx].tag == tag ? cache_regs[set_idx].way_arr[way_idx].blocks[block_idx] : load_instr): 32'b0;
-
-
     typedef enum reg[4:0] {
         WAIT,
         FETCHING_BLOCKS,
@@ -134,7 +134,7 @@ module instr_cache(
     reg [BLOCK_WIDTH - 1: 0] fetch_block_idx;
     reg [N_WAY_BW - 1 : 0] fetch_way_idx_reg;
     always_ff @(posedge reset or posedge clock) begin
-        if(reset) begin
+        if(reset || flush) begin
             int i_set;
             int i_way;
             int i_block;
@@ -153,12 +153,12 @@ module instr_cache(
         end else begin
             case(state) 
             WAIT: begin
-                if(ire && !cache_hit) begin
+                if(!bypass && ire && !cache_hit) begin
                     state <= FETCHING_BLOCKS;
                     cache_regs[set_idx].way_arr[fetch_way_idx_comb].valid <= 1'b0;
                     fetch_way_idx_reg <= fetch_way_idx_comb;
                 end
-                if(ire && cache_hit) begin
+                if(!bypass && ire && cache_hit) begin
                     for(int i_way = 0; i_way < N_WAYS; ++i_way) begin
                         if(way_idx == i_way) continue;
 
@@ -193,9 +193,11 @@ module instr_cache(
             endcase
         end
     end
+    reg        dau_ire_comb;
+    reg [31:0] dau_iaddr_comb;
     always_comb begin
-        dau_ire = 1'b0;
-        dau_iaddr = 32'b0;
+        dau_ire_comb = 1'b0;
+        dau_iaddr_comb = 32'b0;
         fetch_way_idx_comb = N_WAYS - 1;
         
         begin
@@ -212,16 +214,26 @@ module instr_cache(
         end
         case(state)
         WAIT: begin
-            dau_ire = 1'b0;
-            dau_iaddr = 32'b0;
+            dau_ire_comb = 1'b0;
+            dau_iaddr_comb = 32'b0;
         end
         FETCHING_BLOCKS: begin
-            dau_ire = 1'b1;
-            dau_iaddr = { iaddr[31:6], fetch_block_idx, 2'b0 };
+            dau_ire_comb = 1'b1;
+            dau_iaddr_comb = { iaddr[31:6], fetch_block_idx, 2'b0 };
         end
         FETCH_COMPLETE: begin
-            dau_ire = 1'b0;
+            dau_ire_comb = 1'b0;
         end
         endcase
     end
+    
+
+    assign iack = bypass ? dau_iack : cache_hit;
+    assign idata = bypass ? dau_idata : (iack ? (
+        cache_regs[set_idx].way_arr[way_idx].tag == tag ? 
+        cache_regs[set_idx].way_arr[way_idx].blocks[block_idx] : load_instr): 
+        32'b0);
+
+    assign dau_ire = bypass ? ire : dau_ire_comb;
+    assign dau_iaddr = bypass ? iaddr : dau_iaddr_comb;
 endmodule

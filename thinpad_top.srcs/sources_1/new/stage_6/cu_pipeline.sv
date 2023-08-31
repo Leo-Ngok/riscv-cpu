@@ -4,10 +4,11 @@ module cu_pipeline (
     input wire rst,
     
     // Device access unit
-    output reg         dau_instr_re_o,
+    output wire        dau_instr_re_o,
     output wire [31:0] dau_instr_addr_o,
     input  wire [31:0] dau_instr_data_i,
     input  wire        dau_instr_ack_i,
+    output wire        dau_instr_bypass_o, 
 
     output wire        dau_we_o,
     output wire        dau_re_o,
@@ -16,6 +17,7 @@ module cu_pipeline (
     output wire [31:0] dau_data_o,
     input  wire [31:0] dau_data_i,
     input  wire        dau_ack_i,
+    output wire        dau_bypass_o, 
 
     // Register file
     output wire [ 4:0] rf_raddr1,
@@ -44,9 +46,13 @@ module cu_pipeline (
     // Pre - IF
     wire [31:0] pre_if_ip;
     // IF
+    wire [31:0] satp;
+
     wire jump_pred;
     wire [31:0] next_ip_pred;
     wire [31:0] next_ip;
+    wire        if_mmu_ack;
+    wire [31:0] if_mmu_data_arrival;
     // ID
     // From IF stage
     wire [31:0] id_instr;
@@ -109,6 +115,8 @@ module cu_pipeline (
     wire [31:0] mem_wbdata;
 
     // Stage generated signals.
+    wire [31:0] mem_mmu_data_arrival;
+    wire        mem_mmu_ack;
     wire [31:0] mem_mrdata_adjusted;
     wire [31:0] mem_rf_wdata;
     wire        mem_pause;
@@ -123,12 +131,10 @@ module cu_pipeline (
     wire [31:0] wb_data;
     
     // IF
-    assign dau_instr_re_o = 1'b1;//!(mem_mwe || mem_mre);
-    assign dau_instr_addr_o = pre_if_ip;
     next_instr_ptr ip_predict(
         .mem_ack(),
         .curr_ip(pre_if_ip),
-        .curr_instr(dau_instr_data_i),
+        .curr_instr(if_mmu_data_arrival),
         .next_ip_pred(next_ip_pred),
         .jump_pred(jump_pred)
     );
@@ -209,16 +215,16 @@ module cu_pipeline (
         .wb_wdata(alu_wbdata_adjusted)
     );
     // MEM
-    assign dau_we_o    = mem_mwe;
+    /*assign dau_we_o    = mem_mwe;
     assign dau_re_o    = mem_mre;
     assign dau_addr_o  = (mem_mwe || mem_mre) ? mem_addr : 32'b0;
     assign dau_byte_en = mem_mbe;
-    assign dau_data_o  = mem_data;
+    assign dau_data_o  = mem_data;*/
 
     mem_data_recv_adjust mem_read_adjust(
         .instr(mem_instr),
         .mem_addr(mem_addr),
-        .data_i(dau_data_i),
+        .data_i(mem_mmu_data_arrival),
         .data_o(mem_mrdata_adjusted)
     );
     rf_write_data_mux rf_wdata_mux(
@@ -234,7 +240,7 @@ module cu_pipeline (
     );
     devacc_pause device_access_pause(
         .mem_instr(mem_instr),
-        .dau_ack(dau_ack_i),
+        .dau_ack(mem_mmu_ack),
         .pause_o(mem_pause)
     );
     csr csr_inst(
@@ -250,6 +256,55 @@ module cu_pipeline (
 
         .take_ip(mem_csr_take_ip),
         .new_ip(mem_csr_new_ip)
+    );
+    assign satp = { csr_inst.mmu_enable, csr_inst.satp[30:0] };
+    mmu data_mm(
+        .clock(clk),
+        .reset(rst),
+
+        .satp(satp),
+        .va(mem_addr),
+        .pa(dau_addr_o),
+
+        .data_we_i(mem_mwe),
+        .data_re_i(mem_mre),
+        .byte_en_i(mem_mbe),
+        .data_departure_i(mem_data),
+        .data_arrival_o(mem_mmu_data_arrival),
+        .data_ack_o(mem_mmu_ack),
+
+        .data_we_o(dau_we_o),
+        .data_re_o(dau_re_o),
+        .byte_en_o(dau_byte_en),
+        .data_departure_o(dau_data_o),
+        .data_arrival_i(dau_data_i),
+        .data_ack_i(dau_ack_i),
+
+        .bypass(dau_bypass_o)
+    );
+    mmu instr_mm(
+        .clock(clk),
+        .reset(rst),
+
+        .satp(satp),
+        .va(pre_if_ip),
+        .pa(dau_instr_addr_o),
+
+        .data_we_i(1'b0),
+        .data_re_i(1'b1),
+        .byte_en_i(4'b1111),
+        .data_departure_i(32'b0),
+        .data_arrival_o(if_mmu_data_arrival),
+        .data_ack_o(if_mmu_ack),
+
+        .data_we_o(),
+        .data_re_o(dau_instr_re_o),
+        .byte_en_o(),
+        .data_departure_o(),
+        .data_arrival_i(dau_instr_data_i),
+        .data_ack_i(dau_instr_ack_i),
+
+        .bypass(dau_instr_bypass_o)
     );
     // WB
     assign rf_we    = wb_we;
@@ -268,8 +323,8 @@ module cu_pipeline (
     wire mem_wb_bubble;
 
     cu_orchestra cu_control(
-        .if_instr(dau_instr_data_i),
-        .if_ack  (dau_instr_ack_i),
+        .if_instr(if_mmu_data_arrival),
+        .if_ack  (if_mmu_ack),
 
         .id_instr(id_instr),
         .id_raddr1(decoder_raddr1),
@@ -324,7 +379,7 @@ module cu_pipeline (
         .if_jump_pred(jump_pred),
         .id_jump_pred(id_jump_pred),
 
-        .if_instr(dau_instr_data_i),
+        .if_instr(if_mmu_data_arrival),
         .id_instr(id_instr)
     );
 

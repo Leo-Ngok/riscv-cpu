@@ -219,7 +219,7 @@ module csr(
 
     assign take_ip = take_ip_comb; 
     assign new_ip = new_ip_comb;
-    
+
     always_ff @(posedge reset or posedge clock) begin
         if(reset) begin
             privilege <= MACHINE;
@@ -447,5 +447,6 @@ module csr(
     // if address
     // dev access load/store address
     // for illegal instr, written as faulty instr
-
+    wire mmu_enable;
+    assign mmu_enable = satp[31] && (privilege != MACHINE);
 endmodule

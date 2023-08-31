@@ -136,6 +136,8 @@ module stage_6_top (
   wire [31:0] dau_instr_data;
   wire        dau_instr_ack;
 
+  wire        i_cache_bypass;
+
   wire        i_cache_re;
   wire [31:0] i_cache_addr;
   wire [31:0] i_cache_data;
@@ -163,6 +165,8 @@ module stage_6_top (
     .clock(sys_clk),
     .reset(sys_rst),
     
+    .bypass(i_cache_bypass),
+    .flush(1'b0), // TODO
     // TO CU.
     .ire  (i_cache_re),
     .iaddr(i_cache_addr),
@@ -253,7 +257,7 @@ module stage_6_top (
     .dau_instr_addr_o(i_cache_addr),
     .dau_instr_ack_i (i_cache_ack),
     .dau_instr_data_i(i_cache_data),
-
+    .dau_instr_bypass_o(i_cache_bypass),
 
     .dau_we_o   (dau_we        ),
     .dau_re_o   (dau_re        ),
@@ -262,6 +266,7 @@ module stage_6_top (
     .dau_data_i (dau_data_read ),
     .dau_data_o (dau_data_write),
     .dau_ack_i  (dau_ack       ),
+    .dau_bypass_o(), 
 
     .rf_raddr1(rf_raddr1),
     .rf_rdata1(rf_rdata1),
