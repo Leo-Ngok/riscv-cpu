@@ -39,12 +39,21 @@ module mmu(
 
     wire mmu_enable;
     reg acc;
+
+    reg tlb_we;
+    reg [31:0] tlb_wva;
+    reg [31:0] tlb_wpte;
+
+    wire tlb_valid;
+    wire [31:0] tlb_pte;
     always_comb begin
         acc = (mmu_enable) && (data_we_i || data_re_i);
         next_state = WAIT;
         case(mmu_state) 
         WAIT: begin
-            if(acc) begin
+            if(acc
+            && !tlb_valid
+            ) begin
                 next_state = FETCH_ROOT_PAGE;
             end else begin
                 next_state = WAIT;
@@ -98,7 +107,25 @@ module mmu(
         data_arrival_comb = 32'b0;
 
         bypass_comb = 0;
+
+        
+        tlb_we = 0;
+        tlb_wpte = 32'b0;
+        tlb_wva = 32'b0;
         case(mmu_state)
+        WAIT: begin
+            if(tlb_valid) begin
+                data_re_comb = data_re_i;
+                data_we_comb = data_we_i;
+                data_be_comb = byte_en_i;
+                data_pa_comb = { tlb_pte[29:10], va[11:0] };
+                data_departure_comb = data_departure_i;
+                if(data_ack_i) begin
+                    data_ack_comb = 1;
+                    data_arrival_comb = data_arrival_i;
+                end
+            end
+        end
         FETCH_ROOT_PAGE: begin
             data_re_comb = 1;
             data_be_comb = 4'b1111;
@@ -110,6 +137,9 @@ module mmu(
             data_be_comb = 4'b1111;
             data_pa_comb = { second_page_pte_reg[29:10], va[21:12], 2'b0 };
             bypass_comb = 1;
+            tlb_we = 1;
+            tlb_wpte = data_arrival_i;
+            tlb_wva = va;
         end 
         DATA_ACCESS: begin
             data_re_comb = data_re_i;
@@ -155,4 +185,18 @@ module mmu(
     assign data_ack_o = mmu_enable ? data_ack_comb : data_ack_i;
     assign data_arrival_o = mmu_enable ? data_arrival_comb : data_arrival_i;
     assign bypass = mmu_enable ? bypass_comb : 1'b0;
+
+    tlb buffer(
+        .clock(clock),
+        .reset(reset),
+        .flush(1'b0),
+        .re(acc),
+        .rva(va),
+        .rpte(tlb_pte),
+        .rvalid(tlb_valid),
+
+        .we(tlb_we),
+        .wva(tlb_wva),
+        .wpte(tlb_wpte)
+    );
 endmodule
