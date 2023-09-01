@@ -143,6 +143,15 @@ module stage_6_top (
   wire [31:0] i_cache_data;
   wire [31:0] i_cache_ack;
 
+  wire        d_cache_bypass;
+  wire        d_cache_we;
+  wire        d_cache_re;
+  wire [31:0] d_cache_addr;
+  wire [ 3:0] d_cache_be;
+  wire [31:0] d_cache_data_departure;
+  wire        d_cache_ack;
+  wire [31:0] d_cache_data_arrival;
+
   parameter ADDR_WIDTH = 5;
   parameter DATA_WIDTH = 32;
   wire [ADDR_WIDTH - 1 : 0] rf_raddr1;
@@ -178,7 +187,30 @@ module stage_6_top (
     .dau_iack (dau_instr_ack),
     .dau_idata(dau_instr_data)
   );
+  cache dcache(
+    .clock(sys_clk),
+    .reset(sys_rst),
 
+    .bypass(d_cache_bypass),
+    .flush(1'b0), // TODO
+
+    // TO CU.
+    .cu_we  (d_cache_we),
+    .cu_re  (d_cache_re),
+    .cu_addr(d_cache_addr),
+    .cu_be  (d_cache_be),
+    .cu_data_i(d_cache_data_departure),
+    .cu_ack (d_cache_ack),
+    .cu_data_o(d_cache_data_arrival),
+    // TO DAU
+    .dau_we  (dau_we),
+    .dau_re  (dau_re),
+    .dau_addr(dau_addr),
+    .dau_be  (dau_byte_en),
+    .dau_data_o(dau_data_write),
+    .dau_ack (dau_ack),
+    .dau_data_i(dau_data_read)
+  );
   dau_i_d __dau(
     .sys_clk(sys_clk),
     .sys_rst(sys_rst),
@@ -259,14 +291,22 @@ module stage_6_top (
     .dau_instr_data_i(i_cache_data),
     .dau_instr_bypass_o(i_cache_bypass),
 
-    .dau_we_o   (dau_we        ),
+    /*.dau_we_o   (dau_we        ),
     .dau_re_o   (dau_re        ),
     .dau_addr_o (dau_addr      ),
     .dau_byte_en(dau_byte_en   ),
     .dau_data_i (dau_data_read ),
     .dau_data_o (dau_data_write),
-    .dau_ack_i  (dau_ack       ),
-    .dau_bypass_o(), 
+    .dau_ack_i  (dau_ack       ),*/
+    .dau_we_o   (d_cache_we),
+    .dau_re_o   (d_cache_re),
+    .dau_addr_o (d_cache_addr),
+    .dau_byte_en(d_cache_be),
+    .dau_data_i (d_cache_data_arrival),
+    .dau_data_o (d_cache_data_departure),
+    .dau_ack_i  (d_cache_ack),
+
+    .dau_bypass_o(d_cache_bypass), 
 
     .rf_raddr1(rf_raddr1),
     .rf_rdata1(rf_rdata1),
