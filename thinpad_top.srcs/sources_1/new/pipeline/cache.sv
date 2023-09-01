@@ -413,7 +413,12 @@ module cache(
         end
         RELEASE_BLOCKS: begin
             dau_we_comb = 1'b1;
-            dau_addr_comb = { cu_addr[31:6], fetch_block_idx, 2'b0 };
+            // [31:22] [21:2]                [1:0]
+            // cu_addr [21:20] [19:6] [5:2]   00
+            //    cu_addr       tag   fetch block
+            // WARNING: Do not use cu_addr directly, since you are not writing the block you request
+            // to write. The block to be spilt is the victim block with lowest lru.
+            dau_addr_comb = { cu_addr[31:20], cache_regs[set_idx].way_arr[fetch_way_idx_reg].tag, fetch_block_idx, 2'b0 };
             dau_data_departure_comb = cache_regs[set_idx].way_arr[fetch_way_idx_reg].blocks[fetch_block_idx];
         end
         FETCHING_BLOCKS: begin

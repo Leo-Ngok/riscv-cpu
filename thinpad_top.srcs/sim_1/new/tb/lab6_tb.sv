@@ -141,8 +141,8 @@ module lab6_tb;
     # 3500000
     uart.pc_send_byte(8'h47); // G = 47, T = 54
     // 0x800010a8 <UTEST_PUTC>
-    // 0x80001080 
-    uart.pc_send_byte(8'ha8);
+    // 0x80001080 <UTEST_4MDCT>
+    uart.pc_send_byte(8'h80);
     uart.pc_send_byte(8'h10);
     uart.pc_send_byte(8'h00);
     uart.pc_send_byte(8'h80);
