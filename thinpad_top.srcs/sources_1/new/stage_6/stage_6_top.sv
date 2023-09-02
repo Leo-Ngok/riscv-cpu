@@ -137,6 +137,7 @@ module stage_6_top (
   wire        dau_instr_ack;
 
   wire        i_cache_bypass;
+  wire        i_cache_invalidate;
 
   wire        i_cache_re;
   wire [31:0] i_cache_addr;
@@ -151,6 +152,9 @@ module stage_6_top (
   wire [31:0] d_cache_data_departure;
   wire        d_cache_ack;
   wire [31:0] d_cache_data_arrival;
+
+  wire        d_cache_clear;
+  wire        d_cache_clear_complete;
 
   parameter ADDR_WIDTH = 5;
   parameter DATA_WIDTH = 32;
@@ -170,7 +174,7 @@ module stage_6_top (
   wire [DATA_WIDTH - 1 : 0] alu_out;
 
   wire step;
-  instr_cache icache(
+  /*instr_cache icache(
     .clock(sys_clk),
     .reset(sys_rst),
     
@@ -186,13 +190,41 @@ module stage_6_top (
     .dau_iaddr(dau_instr_addr), 
     .dau_iack (dau_instr_ack),
     .dau_idata(dau_instr_data)
+  );*/
+  cache icache(
+    .clock(sys_clk),
+    .reset(sys_rst),
+    
+    .bypass(i_cache_bypass),
+    .flush(1'b0),
+    .invalidate(i_cache_invalidate),
+    .clear_complete(),
+
+    .cu_we  (1'b0),
+    .cu_re  (i_cache_re),
+    .cu_addr(i_cache_addr),
+    .cu_be  (4'b1111),
+    .cu_data_i(32'b0),
+    .cu_ack (i_cache_ack),
+    .cu_data_o(i_cache_data),
+
+    .dau_we  (),
+    .dau_re  (dau_instr_re),
+    .dau_addr(dau_instr_addr),
+    .dau_be  (),
+    .dau_data_o(),
+    .dau_ack (dau_instr_ack),
+    .dau_data_i(dau_instr_data)
   );
+
   cache dcache(
     .clock(sys_clk),
     .reset(sys_rst),
 
-    .bypass(d_cache_bypass),
-    .flush(1'b0), // TODO
+    .bypass(d_cache_bypass), /* Hardwire to 1 if you want to explicitly disable D-cache. */
+    .flush(d_cache_clear), 
+    .invalidate(1'b0),
+    .clear_complete(d_cache_clear_complete),
 
     // TO CU.
     .cu_we  (d_cache_we),
@@ -290,7 +322,7 @@ module stage_6_top (
     .dau_instr_ack_i (i_cache_ack),
     .dau_instr_data_i(i_cache_data),
     .dau_instr_bypass_o(i_cache_bypass),
-
+    .dau_instr_cache_invalidate(i_cache_invalidate),
     /*.dau_we_o   (dau_we        ),
     .dau_re_o   (dau_re        ),
     .dau_addr_o (dau_addr      ),
@@ -307,6 +339,8 @@ module stage_6_top (
     .dau_ack_i  (d_cache_ack),
 
     .dau_bypass_o(d_cache_bypass), 
+    .dau_cache_clear(d_cache_clear),
+    .dau_cache_clear_complete(d_cache_clear_complete),
 
     .rf_raddr1(rf_raddr1),
     .rf_rdata1(rf_rdata1),

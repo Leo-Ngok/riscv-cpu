@@ -10,7 +10,10 @@ module instr_decoder(
     output wire mem_we,
 
     // output wire [3:0] mem_be: No, don't do this. Find write address first.
-    output wire csr_acc
+    output wire csr_acc,
+
+    output wire clear_icache,
+    output wire clear_tlb
 );
     parameter LUI    = 7'b0110111;
     parameter AUIPC  = 7'b0010111;
@@ -22,6 +25,7 @@ module instr_decoder(
     parameter ARITHI = 7'b0010011;
     parameter ARITH  = 7'b0110011;
     parameter SYSTEM = 7'b1110011;
+    parameter FENCE_I= 7'b0001111;
     // system operations not implemented yet.
     // TODO: Implement FENCE, ECALL, CSR* ...
 
@@ -35,18 +39,22 @@ module instr_decoder(
 
     assign write_en = !(
         opcode == BRANCH || 
-        opcode == STORE   
+        opcode == STORE  ||
+        clear_tlb ||
+        clear_icache
     );
     assign read1_en = !(
         opcode == LUI    || 
         opcode == AUIPC  || 
-        opcode == JAL
+        opcode == JAL    ||
+        clear_tlb ||
+        clear_icache
     );
     assign read2_en = (
         opcode == BRANCH ||
         opcode == STORE  ||
         opcode == ARITH
-    );
+    ) && !(clear_icache || clear_tlb); 
 
     assign we = write_en;
     assign waddr  = write_en ? instr[11: 7] : 5'b0;
@@ -56,6 +64,10 @@ module instr_decoder(
     assign mem_re = opcode == LOAD;
     assign mem_we = opcode == STORE;
     assign csr_acc = opcode == SYSTEM && instr[14:12] != 3'b0;
+    // volume 2 p.138
+    assign clear_tlb = opcode == SYSTEM && instr[14:7] == 8'b0 && instr[31:25] == 7'b0001001;
+    // volume 1 p.131
+    assign clear_icache = opcode == FENCE_I && instr[14:12] == 3'b001;
 endmodule
 
 module instr_mux(

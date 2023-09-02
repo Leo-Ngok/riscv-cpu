@@ -3,7 +3,7 @@ module tlb(
     input wire clock,
     input wire reset,
     
-    input wire flush,
+    input wire invalidate,
     
     input wire re,
     input  wire [31:0] rva,
@@ -94,7 +94,13 @@ module tlb(
                 end
                 tlb_regs[rtlbi].way_arr[hit_way].lru_priority = {N_WAY_BW{1'b1}}; 
             end
-            if(we) begin
+            if(invalidate) begin
+                for(int i_set = 0; i_set < SET_COUNT; ++i_set) begin
+                for(int i_way = 0; i_way < N_WAYS; ++ i_way) begin
+                    tlb_regs[i_set].way_arr[i_way].valid <= 1'b0;
+                end
+            end
+            end else if(we) begin
                 tlb_regs[wtlbi].way_arr[lru_replace_idx].valid <= 1'b1;
                 tlb_regs[wtlbi].way_arr[lru_replace_idx].tag <= wtlbt;
                 tlb_regs[wtlbi].way_arr[lru_replace_idx].pte <= wpte;

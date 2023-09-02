@@ -20,7 +20,8 @@ module mmu(
     input  wire [31:0] data_arrival_i,
     input  wire        data_ack_i,
 
-    output wire        bypass
+    output wire        bypass,
+    input  wire        invalidate_tlb
 );
     typedef enum logic [3:0] { 
         WAIT, FETCH_ROOT_PAGE, FETCH_2ND_PAGE, DATA_ACCESS
@@ -189,7 +190,7 @@ module mmu(
     tlb buffer(
         .clock(clock),
         .reset(reset),
-        .flush(1'b0),
+        .invalidate(invalidate_tlb),
         .re(acc),
         .rva(va),
         .rpte(tlb_pte),

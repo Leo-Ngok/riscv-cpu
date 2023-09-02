@@ -11,6 +11,10 @@ module next_instr_ptr(
     parameter BRANCH = 32'b????_????_????_????_????_????_?110_0011;
     parameter JAL  = 32'b????_????_????_????_????_????_?110_1111;
     parameter JALR = 32'b????_????_????_????_????_????_?110_0111;
+    parameter ECALL  = 32'b0000_0000_0000_00000_000_00000_111_0011;
+    parameter EBREAK = 32'b0000_0000_0001_00000_000_00000_111_0011;
+    parameter MRET   =  32'b0011000_00010_00000_000_00000_111_0011;
+    parameter SRET   =  32'b0001000_00010_00000_000_00000_111_0011;
     parameter HALT = 32'b0;
     reg [13:0] lo_off;
     always_comb begin
@@ -46,7 +50,7 @@ module next_instr_ptr(
                 curr_instr[31], curr_instr[19:12], curr_instr[20],
                 curr_instr[30:21], 1'b0};
         end
-        JALR: begin
+        JALR, MRET, SRET, ECALL, EBREAK: begin
             // Nope, we can do nothing, sad :(
             next_ip_pred = curr_ip;
         end
@@ -58,9 +62,11 @@ module next_instr_ptr(
 endmodule
 
 module ip_mux(
+    input wire mem_modif,
     input wire csr_modif,
     input wire alu_modif,
 
+    input wire [31:0] mem_ip,
     input wire [31:0] csr_ip,
     input wire [31:0] alu_ip,
     input wire [31:0] pred_ip,
@@ -69,7 +75,9 @@ module ip_mux(
 );
     reg [31:0] res_ip_comb;
     always_comb begin
-        if(csr_modif) begin
+        if(mem_modif) begin
+            res_ip_comb = mem_ip + 4;
+        end else if(csr_modif) begin
             res_ip_comb = csr_ip;
         end else if(alu_modif) begin
             res_ip_comb = alu_ip;

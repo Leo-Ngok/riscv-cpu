@@ -88,6 +88,8 @@ endmodule
 module devacc_pause(
     input wire [31:0] mem_instr,
     input wire dau_ack,
+    input wire dau_cache_clear,
+    input wire dau_cache_clear_complete,
     output reg pause_o
 );
 
@@ -98,6 +100,8 @@ module devacc_pause(
     always_comb begin
         if(mem_instr[6:0] == 7'b000_0011 || mem_instr[6:0] == 7'b010_0011) begin
             pause_o = ~dau_ack;
+        end else if(dau_cache_clear) begin
+            pause_o = ~dau_cache_clear_complete;
         end else begin
             pause_o = 1'b0;
         end

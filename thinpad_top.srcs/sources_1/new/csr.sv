@@ -337,95 +337,95 @@ module csr(
     // Should modify per-interrupt enable bits
     // in higher priv. mode before ceding to lower priv.
 
-    wire uie = mstatus[0]; // ---+
-    wire sie = mstatus[1]; // ---+-- Interrupt enable
-    wire mie = mstatus[3]; // ---+   
+    // wire uie = mstatus[0]; // ---+
+    // wire sie = mstatus[1]; // ---+-- Interrupt enable
+    // wire mie = mstatus[3]; // ---+   
 
-    // trap: y -> x: xPIE <- XIE; xPP <- y;
-    // previous interupt enable
-    wire upie = mstatus[4];
-    wire spie = mstatus[5];
-    wire mpie = mstatus[7];
+    // // trap: y -> x: xPIE <- XIE; xPP <- y;
+    // // previous interupt enable
+    // wire upie = mstatus[4];
+    // wire spie = mstatus[5];
+    // wire mpie = mstatus[7];
 
-    // previous privilege mode
-    // WLRL
-    wire spp = mstatus[8];      
-    wire [1:0] mpp  = mstatus[12:11];  // MONITOR
-    // when running xret:
-    // suppose y = xPP, then 
-    // xIE <- xPIE;
-    // Privilege mode set to y;
-    // xPIE <- 1;
-    // xPP <- U;
+    // // previous privilege mode
+    // // WLRL
+    // wire spp = mstatus[8];      
+    // wire [1:0] mpp  = mstatus[12:11];  // MONITOR
+    // // when running xret:
+    // // suppose y = xPP, then 
+    // // xIE <- xPIE;
+    // // Privilege mode set to y;
+    // // xPIE <- 1;
+    // // xPP <- U;
 
-    // useless
-    wire [1:0] fs = mstatus[14:13];
-    wire [1:0] xs = mstatus[16:15];
+    // // useless
+    // wire [1:0] fs = mstatus[14:13];
+    // wire [1:0] xs = mstatus[16:15];
 
-    // memory privilege
-    // Modify PRiVilege
-    wire mprv = mstatus[17];
+    // // memory privilege
+    // // Modify PRiVilege
+    // wire mprv = mstatus[17];
 
-    // permit Supervisor User Memory access 
-    wire sum = mstatus[18];
+    // // permit Supervisor User Memory access 
+    // wire sum = mstatus[18];
 
-    // make executable readable.    
-    // read page marked executable only.
-    wire mxr = mstatus[19];
+    // // make executable readable.    
+    // // read page marked executable only.
+    // wire mxr = mstatus[19];
 
-    // trap virtual memory
-    wire tvm = mstatus[20];
+    // // trap virtual memory
+    // wire tvm = mstatus[20];
 
-    // timeout wait 
-    // when set, ...
-    wire tw = mstatus[21];
+    // // timeout wait 
+    // // when set, ...
+    // wire tw = mstatus[21];
 
-    // trap sret, permits supervisor return
-    // augmented virtualization mechanism
-    wire tsr = mstatus[22];
-    wire sd = mstatus[31];
+    // // trap sret, permits supervisor return
+    // // augmented virtualization mechanism
+    // wire tsr = mstatus[22];
+    // wire sd = mstatus[31];
 
 
-    // mtvec
-    wire [29:0] base = mtvec[31:2];
-    wire [1:0] mode  = mtvec[1:0];
+    // // mtvec
+    // wire [29:0] base = mtvec[31:2];
+    // wire [1:0] mode  = mtvec[1:0];
 
-    // Interrupt enable and pending...
-    // For mip, 
-    // only usip, ssip, utip, stip, ueip, seip
-    // writable in m mode
-    // only usip, utip, ueip writable in s mode
+    // // Interrupt enable and pending...
+    // // For mip, 
+    // // only usip, ssip, utip, stip, ueip, seip
+    // // writable in m mode
+    // // only usip, utip, ueip writable in s mode
 
-    // (s)oftware
-    // (t)imer
-    // (e)xternal
+    // // (s)oftware
+    // // (t)imer
+    // // (e)xternal
 
-    wire usip = mip[0];
-    wire ssip = mip[1];
-    wire msip = mip[3];
+    // wire usip = mip[0];
+    // wire ssip = mip[1];
+    // wire msip = mip[3];
 
-    wire utip = mip[4];
-    wire stip = mip[5];
-    wire mtip = mip[7]; // MONITOR
+    // wire utip = mip[4];
+    // wire stip = mip[5];
+    // wire mtip = mip[7]; // MONITOR
 
-    wire ueip = mip[8];
-    wire seip = mip[9];
-    wire meip = mip[11];
+    // wire ueip = mip[8];
+    // wire seip = mip[9];
+    // wire meip = mip[11];
 
-    wire usie = mie[0];
-    wire ssie = mie[1];
-    wire msie = mie[3];
+    // wire usie = mie[0];
+    // wire ssie = mie[1];
+    // wire msie = mie[3];
 
-    wire utie = mie[4];
-    wire stie = mie[5];
-    wire mtie = mie[7]; // MONITOR
+    // wire utie = mie[4];
+    // wire stie = mie[5];
+    // wire mtie = mie[7]; // MONITOR
 
-    wire ueie = mie[8];
-    wire seie = mie[9];
-    wire meie = mie[11];
+    // wire ueie = mie[8];
+    // wire seie = mie[9];
+    // wire meie = mie[11];
 
-    wire [30:0] ex_code = mcause[30:0];
-    wire intr = mcause[31];
+    // wire [30:0] ex_code = mcause[30:0];
+    // wire intr = mcause[31];
     // 0 - instr address misaligned
     // 1 - instr access fault
     // 2 - illegal instr

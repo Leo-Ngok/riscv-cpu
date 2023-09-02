@@ -139,13 +139,73 @@ module lab6_tb;
     # 10000
     push_btn = 0;
     # 3500000
-    uart.pc_send_byte(8'h47); // G = 47, T = 54
+    // Write the following program.
+    // li a0, 114514
+    // ret
+    // equivalent to
+//      0x80100000:     0001c537        lui     a0,0x1c
+//      0x80100004:     f5250513        addi    a0,a0,-174
+//      0x80100008:     00008067        ret
+
+    // to write an int to memory, send the following uart sequence.
+    // A
+    // address, 32 bit
+    // 00000004
+    // instruction.
+
+    // first, send lui a0, 0x1c
+    uart.pc_send_byte(8'h41); // A
+    uart.pc_send_byte(8'h00); // ADDRESS
+    uart.pc_send_byte(8'h00);
+    uart.pc_send_byte(8'h10);
+    uart.pc_send_byte(8'h80);
+    uart.pc_send_byte(8'h04); // 4
+    uart.pc_send_byte(8'h00);
+    uart.pc_send_byte(8'h00);
+    uart.pc_send_byte(8'h00);
+    uart.pc_send_byte(8'h37); // instruction
+    uart.pc_send_byte(8'hc5);
+    uart.pc_send_byte(8'h01);
+    uart.pc_send_byte(8'h00);
+    
+    // send addi a0,a0,-174
+    uart.pc_send_byte(8'h41); // A
+    uart.pc_send_byte(8'h04); // ADDRESS
+    uart.pc_send_byte(8'h00);
+    uart.pc_send_byte(8'h10);
+    uart.pc_send_byte(8'h80);
+    uart.pc_send_byte(8'h04); // 4
+    uart.pc_send_byte(8'h00);
+    uart.pc_send_byte(8'h00);
+    uart.pc_send_byte(8'h00);
+    uart.pc_send_byte(8'h13); // instruction
+    uart.pc_send_byte(8'h05);
+    uart.pc_send_byte(8'h25);
+    uart.pc_send_byte(8'hf5);
+
+    // ret
+    uart.pc_send_byte(8'h41); // A
+    uart.pc_send_byte(8'h08); // ADDRESS
+    uart.pc_send_byte(8'h00);
+    uart.pc_send_byte(8'h10);
+    uart.pc_send_byte(8'h80);
+    uart.pc_send_byte(8'h04); // 4
+    uart.pc_send_byte(8'h00);
+    uart.pc_send_byte(8'h00);
+    uart.pc_send_byte(8'h00);
+    uart.pc_send_byte(8'h67); // instruction
+    uart.pc_send_byte(8'h80);
+    uart.pc_send_byte(8'h00);
+    uart.pc_send_byte(8'h00);
+
+
+    uart.pc_send_byte(8'h47); // G = 47, T = 54, A = 41
     // 0x800010a8 <UTEST_PUTC>
     // 0x80001080 <UTEST_4MDCT>
-    uart.pc_send_byte(8'h80);
-    uart.pc_send_byte(8'h10);
     uart.pc_send_byte(8'h00);
-    uart.pc_send_byte(8'h80);
+    uart.pc_send_byte(8'h00);
+    uart.pc_send_byte(8'h00);
+    uart.pc_send_byte(8'h00);
     #10000 $finish;
   end
 

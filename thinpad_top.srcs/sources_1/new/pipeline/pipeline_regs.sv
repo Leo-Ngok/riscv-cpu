@@ -91,6 +91,8 @@ module id_ex(
 
     // Metadata for Device access stage -- maddr
     // is calculated in ALU stage.
+
+    // For Device access unit.
     input wire        id_mre,
     output reg        ex_mre,
 
@@ -103,11 +105,19 @@ module id_ex(
     input wire [31:0] id_mdata,
     output reg [31:0] ex_mdata,
 
+    // For CSR
     input wire        id_csracc,
     output reg        ex_csracc,
 
     input wire [31:0] id_csrdata,
     output reg [31:0] ex_csrdata,
+
+    // For Cached Unit.
+    input wire        id_clear_tlb,
+    output reg        ex_clear_tlb,
+
+    input wire        id_clear_icache,
+    output reg        ex_clear_icache,
 
     // Metadata for Write back stage -- wrdata 
     // is calcuated in ALU stage, not our duty.
@@ -139,6 +149,9 @@ module id_ex(
 
             ex_csracc   <=  1'b0;
             ex_csrdata  <= 32'b0;
+
+            ex_clear_tlb<=  1'b0;
+            ex_clear_icache <= 1'b0;
             // 3. Write back
             ex_we       <=  1'b1; // NOP is addi x0,x0,0
             ex_wraddr   <=  5'b0;
@@ -164,6 +177,10 @@ module id_ex(
 
                 ex_csracc   <=  1'b0;
                 ex_csrdata  <= 32'b0;
+                
+                ex_clear_tlb<=  1'b0;
+                ex_clear_icache <= 1'b0;
+
                 // 3. Write back
                 ex_we       <=  1'b1;
                 ex_wraddr   <=  5'b0;
@@ -186,6 +203,9 @@ module id_ex(
 
                 ex_csracc   <= id_csracc;
                 ex_csrdata  <= id_csrdata;
+
+                ex_clear_tlb<=  id_clear_tlb;
+                ex_clear_icache <= id_clear_icache;
 
                 // 3. Write back
                 ex_we       <= id_we;
@@ -284,6 +304,13 @@ module ex_mem(
 
     input wire [31:0]  ex_csrdt,
     output reg [31:0] mem_csrdt,
+    
+    // Prepare for d-cache,
+    input wire         ex_clear_tlb,
+    output reg        mem_clear_tlb,
+
+    input wire         ex_clear_icache,
+    output reg        mem_clear_icache,
 
     // Metadata for next stage.
     input wire         ex_we,
@@ -312,6 +339,8 @@ module ex_mem(
             mem_csracc <= 1'b0;
             mem_csrdt  <= 32'b0;
 
+            mem_clear_tlb <= 1'b0;
+            mem_clear_icache <= 1'b0;
             // 2. Write back
             mem_we     <=  1'b1;
             mem_wraddr <= 32'b0;
@@ -335,6 +364,9 @@ module ex_mem(
                 mem_csracc <= 1'b0;
                 mem_csrdt  <= 32'b0;
 
+                mem_clear_tlb <= 1'b0;
+                mem_clear_icache <= 1'b0;
+
                 // 2. Write back
                 mem_we     <=  1'b1;
                 mem_wraddr <= 32'b0;
@@ -354,6 +386,9 @@ module ex_mem(
 
                 mem_csracc <= ex_csracc;
                 mem_csrdt  <= ex_csrdt;
+
+                mem_clear_tlb <= ex_clear_tlb;
+                mem_clear_icache <= ex_clear_icache;
 
                 // 2. Write back
                 mem_we     <= ex_we;
