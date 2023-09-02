@@ -85,14 +85,20 @@ module csr(
     // READS OUT ORIGINAL CSR VALUES
     always_comb begin
         case(address) 
+        12'hf14: rdata_comb = mhartid;
+
         12'h300: rdata_comb = mstatus;
+        12'h302: rdata_comb = medeleg;
+        12'h303: rdata_comb = mideleg;
         12'h304: rdata_comb = mie;
         12'h305: rdata_comb = mtvec;
+
         12'h340: rdata_comb = mscratch;
         12'h341: rdata_comb = mepc;
         12'h342: rdata_comb = mcause;
         12'h343: rdata_comb = mtval;
         12'h344: rdata_comb = mip; 
+
         // no, you should always 'handle' interrupt first.
         12'h180: rdata_comb = satp;
         default: rdata_comb = 32'b0;
@@ -107,10 +113,31 @@ module csr(
     always_comb begin
         wdata_internal = (instr[14]) ? {27'b0, instr[19:15]} : wdata; 
         case(address) 
-        // mstatus: MPP only for monitor
-        12'h300: wdata_comb = {mstatus[31:13], wdata_internal[12:11], mstatus[10:0]};
+        // mstatus: MPP[12:11] only for monitor
+        // for bootloader, 
+        // Bootloader disables FS, clear MPIE also, so make FS[14:13], MPIE[7] writable.
+        // Refer to boot_first_hart in rbl.
+        12'h300: wdata_comb = {
+            mstatus[31:15], wdata_internal[14:11], 
+            mstatus[10:8], wdata_internal[7], 
+            mstatus[6:0]};
+        // medeleg:
+        12'h302: wdata_comb = { 
+            medeleg[31:16], wdata_internal[15],     // Store / AMO page fault
+            medeleg[14],    wdata_internal[13:12], // load, instruction page fault
+            medeleg[11:10], wdata_internal[9:0]}; // secall, uecall, store acc fault, store misalign, load acc fault, load misalign, bp, illegal instr, instr acc fault, instr misalign
+        // mideleg: STIE, SSIE, SEIE
+        12'h303: wdata_comb = {
+            mideleg[31:10], wdata_internal[9], // SEIE
+            mideleg[8:6], wdata_internal[5],   // STIE
+            mideleg[4:2], wdata_internal[1],   // SSIE
+            mideleg[0]};
         // mie: MTIE only for monitor
-        12'h304: wdata_comb = {mie    [31: 8], wdata_internal[  7  ], mie    [ 6:0]};
+        // Support for MSIE is provided for bootloader (though useless)
+        12'h304: wdata_comb = {
+            mie[31: 8], wdata_internal[7], // MTIE
+            mie[6:4], wdata_internal[3],   // MSIE
+            mie[2:0]};
         // mtvec
         12'h305: wdata_comb = wdata_internal;
 
@@ -123,7 +150,9 @@ module csr(
         // mtval
         12'h343: wdata_comb = wdata_internal;
         // mip: MTIP only for monitor
-        12'h344: wdata_comb = {mip    [31: 8], wdata_internal[  7  ], mip    [ 6:0]};
+        // add support for MSIP, since MSIE is set by bootloader.
+        12'h344: wdata_comb = {mip[31: 8], wdata_internal[7], mip[6:4], wdata_internal[3], mip[2:0]};
+        // satp
         12'h180: wdata_comb = wdata_internal;
         default: wdata_comb = 32'b0;
         endcase
@@ -147,7 +176,7 @@ module csr(
         ECALL, EBREAK: begin
             // volume 2 p.39
             take_ip_comb = 1;
-            new_ip_comb = {mtvec[31:2], 2'b0};
+            
 
             case(privilege)
             USER: begin 
@@ -167,8 +196,15 @@ module csr(
             
             if(instr == EBREAK) 
                 mcause_comb = 32'd3;
-            
-            next_priv = MACHINE;
+
+
+            if(privilege != MACHINE && medeleg[mcause_comb[5:0]]) begin
+                next_priv = SUPERVISOR;
+                new_ip_comb = {stvec[31:2], 2'b0};
+            end else begin
+                next_priv = MACHINE;
+                new_ip_comb = {mtvec[31:2], 2'b0};
+            end
 
             case(next_priv) 
             USER: begin // Impossible
@@ -223,7 +259,7 @@ module csr(
     always_ff @(posedge reset or posedge clock) begin
         if(reset) begin
             privilege <= MACHINE;
-            mhartid <= 32'b0;
+            mhartid <= 32'b0;       // MRO field, change for advanced implementations.
 
             mstatus <= 32'b0;
             medeleg <= 32'b0;
@@ -253,7 +289,10 @@ module csr(
             casez(instr)
             CSRRW, CSRRWI: begin
                 case(address) 
+                // 12'hf14: mhartid <= wdata_comb; No, That is a readonly field.
                 12'h300: mstatus    <= wdata_comb;
+                12'h302: medeleg    <= wdata_comb;
+                12'h303: mideleg    <= wdata_comb;
                 12'h304: mie        <= wdata_comb;
                 12'h305: mtvec      <= wdata_comb;
 
@@ -267,7 +306,10 @@ module csr(
             end
             CSRRS, CSRRSI: begin
                 case(address) 
+                // 12'hf14: mhartid <= mhartid |wdata_comb; No, That is a readonly field.
                 12'h300: mstatus    <= mstatus | wdata_comb;
+                12'h302: medeleg    <= mstatus | wdata_comb;
+                12'h303: mideleg    <= mstatus | wdata_comb;
                 12'h304: mie        <= mie     | wdata_comb;
                 12'h305: mtvec      <= mtvec   | wdata_comb;
 
@@ -281,7 +323,10 @@ module csr(
             end
             CSRRC, CSRRCI: begin
                 case(address) 
+                // 12'hf14: mhartid <= mhartid & ~wdata_comb; No, That is a readonly field.
                 12'h300: mstatus    <= mstatus & ~wdata_comb;
+                12'h302: medeleg    <= mstatus & ~wdata_comb;
+                12'h303: mideleg    <= mstatus & ~wdata_comb;
                 12'h304: mie        <= mie     & ~wdata_comb;
                 12'h305: mtvec      <= mtvec   & ~wdata_comb;
 
@@ -299,7 +344,6 @@ module csr(
                 mepc    <= curr_ip;
                 mstatus <= mstatus_comb;
                 mcause  <= mcause_comb;
-                
             end 
             MRET: begin
                 privilege <= priv_mode_t'(mstatus[12:11]);

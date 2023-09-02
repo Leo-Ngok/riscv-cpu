@@ -36,7 +36,7 @@ module cache(
 
     parameter N_WAY_BW = $clog2(N_WAYS);
 
-    // TODO: WARNING: Should implement cache coherence protocol.
+    // TODO: WARNING: Should implement cache coherence protocol. (We now have FENCE, then who's f-- care?)
     wire bypass_internal = bypass || !(32'h8000_0000 <= cu_addr && cu_addr <= 32'h807F_FFFF);
 
     typedef struct packed {
@@ -58,7 +58,7 @@ module cache(
 
    
 
-    wire [VALID_ADDR_WIDTH - 1:0] valid_addr = cu_addr[21:2];
+    wire [VALID_ADDR_WIDTH - 1:0] valid_addr = cu_addr[22:2];
     wire [  SET_WIDTH - 1:0] set_idx   = valid_addr[BLOCK_WIDTH + TAG_WIDTH +:   SET_WIDTH];
     wire [  TAG_WIDTH - 1:0] tag       = valid_addr[BLOCK_WIDTH             +:   TAG_WIDTH];
     wire [BLOCK_WIDTH - 1:0] block_idx = valid_addr[0                       +: BLOCK_WIDTH];

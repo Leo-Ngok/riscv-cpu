@@ -174,23 +174,6 @@ module stage_6_top (
   wire [DATA_WIDTH - 1 : 0] alu_out;
 
   wire step;
-  /*instr_cache icache(
-    .clock(sys_clk),
-    .reset(sys_rst),
-    
-    .bypass(i_cache_bypass),
-    .flush(1'b0), // TODO
-    // TO CU.
-    .ire  (i_cache_re),
-    .iaddr(i_cache_addr),
-    .iack (i_cache_ack),
-    .idata(i_cache_data),
-    // TO DAU
-    .dau_ire  (dau_instr_re),
-    .dau_iaddr(dau_instr_addr), 
-    .dau_iack (dau_instr_ack),
-    .dau_idata(dau_instr_data)
-  );*/
   cache icache(
     .clock(sys_clk),
     .reset(sys_rst),

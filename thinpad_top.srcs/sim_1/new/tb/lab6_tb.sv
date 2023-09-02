@@ -38,9 +38,10 @@ module lab6_tb;
   wire uart_tsre;  // 数据发送完毕标志
 
   // Windows 需要注意路径分隔符的转义，例如 "D:\\foo\\bar.bin"
-  parameter BASE_RAM_INIT_FILE = "D:\\github\\THU_PASS\\Organization\\supervisor-rv\\kernel\\kernel.bin";//\\base_test_new.bin"; //"/tmp/main.bin";//"/tmp/main.bin"; // BaseRAM 初始化文件，请修改为实际的绝对路�?? "D:\\downloads\\kernel-rv32-int.bin";
-  parameter EXT_RAM_INIT_FILE = "/tmp/eram.bin";  // ExtRAM 初始化文件，请修改为实际的绝对路径
-
+  // parameter BASE_RAM_INIT_FILE = "D:\\github\\THU_PASS\\Organization\\supervisor-rv\\kernel\\kernel.bin";//\\base_test_new.bin"; //"/tmp/main.bin";//"/tmp/main.bin"; // BaseRAM 初始化文件，请修改为实际的绝对路�?? "D:\\downloads\\kernel-rv32-int.bin";
+  // parameter EXT_RAM_INIT_FILE = "/tmp/eram.bin";  // ExtRAM 初始化文件，请修改为实际的绝对路径
+  parameter BASE_RAM_INIT_FILE = "D:\\github\\ucore_os_lab\\labcodes_answer\\lab8\\bin\\rbl.img";
+  parameter EXT_RAM_INIT_FILE = "D:\\github\\ucore_os_lab\\labcodes_answer\\lab8\\bin\\ucore.img";
   initial begin
     // 在这里可以自定义测试输入序列，例如：
     dip_sw = 32'h8000_1000;//2;
@@ -139,73 +140,73 @@ module lab6_tb;
     # 10000
     push_btn = 0;
     # 3500000
-    // Write the following program.
-    // li a0, 114514
-    // ret
-    // equivalent to
-//      0x80100000:     0001c537        lui     a0,0x1c
-//      0x80100004:     f5250513        addi    a0,a0,-174
-//      0x80100008:     00008067        ret
+//     // Write the following program.
+//     // li a0, 114514
+//     // ret
+//     // equivalent to
+// //      0x80100000:     0001c537        lui     a0,0x1c
+// //      0x80100004:     f5250513        addi    a0,a0,-174
+// //      0x80100008:     00008067        ret
 
-    // to write an int to memory, send the following uart sequence.
-    // A
-    // address, 32 bit
-    // 00000004
-    // instruction.
+//     // to write an int to memory, send the following uart sequence.
+//     // A
+//     // address, 32 bit
+//     // 00000004
+//     // instruction.
 
-    // first, send lui a0, 0x1c
-    uart.pc_send_byte(8'h41); // A
-    uart.pc_send_byte(8'h00); // ADDRESS
-    uart.pc_send_byte(8'h00);
-    uart.pc_send_byte(8'h10);
-    uart.pc_send_byte(8'h80);
-    uart.pc_send_byte(8'h04); // 4
-    uart.pc_send_byte(8'h00);
-    uart.pc_send_byte(8'h00);
-    uart.pc_send_byte(8'h00);
-    uart.pc_send_byte(8'h37); // instruction
-    uart.pc_send_byte(8'hc5);
-    uart.pc_send_byte(8'h01);
-    uart.pc_send_byte(8'h00);
+//     // first, send lui a0, 0x1c
+//     uart.pc_send_byte(8'h41); // A
+//     uart.pc_send_byte(8'h00); // ADDRESS
+//     uart.pc_send_byte(8'h00);
+//     uart.pc_send_byte(8'h10);
+//     uart.pc_send_byte(8'h80);
+//     uart.pc_send_byte(8'h04); // 4
+//     uart.pc_send_byte(8'h00);
+//     uart.pc_send_byte(8'h00);
+//     uart.pc_send_byte(8'h00);
+//     uart.pc_send_byte(8'h37); // instruction
+//     uart.pc_send_byte(8'hc5);
+//     uart.pc_send_byte(8'h01);
+//     uart.pc_send_byte(8'h00);
     
-    // send addi a0,a0,-174
-    uart.pc_send_byte(8'h41); // A
-    uart.pc_send_byte(8'h04); // ADDRESS
-    uart.pc_send_byte(8'h00);
-    uart.pc_send_byte(8'h10);
-    uart.pc_send_byte(8'h80);
-    uart.pc_send_byte(8'h04); // 4
-    uart.pc_send_byte(8'h00);
-    uart.pc_send_byte(8'h00);
-    uart.pc_send_byte(8'h00);
-    uart.pc_send_byte(8'h13); // instruction
-    uart.pc_send_byte(8'h05);
-    uart.pc_send_byte(8'h25);
-    uart.pc_send_byte(8'hf5);
+//     // send addi a0,a0,-174
+//     uart.pc_send_byte(8'h41); // A
+//     uart.pc_send_byte(8'h04); // ADDRESS
+//     uart.pc_send_byte(8'h00);
+//     uart.pc_send_byte(8'h10);
+//     uart.pc_send_byte(8'h80);
+//     uart.pc_send_byte(8'h04); // 4
+//     uart.pc_send_byte(8'h00);
+//     uart.pc_send_byte(8'h00);
+//     uart.pc_send_byte(8'h00);
+//     uart.pc_send_byte(8'h13); // instruction
+//     uart.pc_send_byte(8'h05);
+//     uart.pc_send_byte(8'h25);
+//     uart.pc_send_byte(8'hf5);
 
-    // ret
-    uart.pc_send_byte(8'h41); // A
-    uart.pc_send_byte(8'h08); // ADDRESS
-    uart.pc_send_byte(8'h00);
-    uart.pc_send_byte(8'h10);
-    uart.pc_send_byte(8'h80);
-    uart.pc_send_byte(8'h04); // 4
-    uart.pc_send_byte(8'h00);
-    uart.pc_send_byte(8'h00);
-    uart.pc_send_byte(8'h00);
-    uart.pc_send_byte(8'h67); // instruction
-    uart.pc_send_byte(8'h80);
-    uart.pc_send_byte(8'h00);
-    uart.pc_send_byte(8'h00);
+//     // ret
+//     uart.pc_send_byte(8'h41); // A
+//     uart.pc_send_byte(8'h08); // ADDRESS
+//     uart.pc_send_byte(8'h00);
+//     uart.pc_send_byte(8'h10);
+//     uart.pc_send_byte(8'h80);
+//     uart.pc_send_byte(8'h04); // 4
+//     uart.pc_send_byte(8'h00);
+//     uart.pc_send_byte(8'h00);
+//     uart.pc_send_byte(8'h00);
+//     uart.pc_send_byte(8'h67); // instruction
+//     uart.pc_send_byte(8'h80);
+//     uart.pc_send_byte(8'h00);
+//     uart.pc_send_byte(8'h00);
 
 
-    uart.pc_send_byte(8'h47); // G = 47, T = 54, A = 41
-    // 0x800010a8 <UTEST_PUTC>
-    // 0x80001080 <UTEST_4MDCT>
-    uart.pc_send_byte(8'h00);
-    uart.pc_send_byte(8'h00);
-    uart.pc_send_byte(8'h00);
-    uart.pc_send_byte(8'h00);
+//     uart.pc_send_byte(8'h47); // G = 47, T = 54, A = 41
+//     // 0x800010a8 <UTEST_PUTC>
+//     // 0x80001080 <UTEST_4MDCT>
+//     uart.pc_send_byte(8'h00);
+//     uart.pc_send_byte(8'h00);
+//     uart.pc_send_byte(8'h00);
+//     uart.pc_send_byte(8'h00);
     #10000 $finish;
   end
 

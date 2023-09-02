@@ -27,7 +27,7 @@ module instr_decoder(
     parameter SYSTEM = 7'b1110011;
     parameter FENCE_I= 7'b0001111;
     // system operations not implemented yet.
-    // TODO: Implement FENCE, ECALL, CSR* ...
+    // TODO: Implement FENCE, ECALL, CSR* ... -- DONE.
 
     wire [6:0] opcode;
 
