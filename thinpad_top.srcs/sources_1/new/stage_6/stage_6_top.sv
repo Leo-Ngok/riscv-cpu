@@ -173,6 +173,8 @@ module stage_6_top (
   wire [DATA_WIDTH - 1 : 0] alu_in2;
   wire [DATA_WIDTH - 1 : 0] alu_out;
 
+  wire local_intr;
+
   wire step;
   cache icache(
     .clock(sys_clk),
@@ -226,7 +228,7 @@ module stage_6_top (
     .dau_ack (dau_ack),
     .dau_data_i(dau_data_read)
   );
-  dau_i_d __dau(
+  dau_unified dau(
     .sys_clk(sys_clk),
     .sys_rst(sys_rst),
 
@@ -258,7 +260,18 @@ module stage_6_top (
     .ext_ram_we_n(ext_ram_we_n),
 
     .rxd(rxd),
-    .txd(txd)
+    .txd(txd),
+
+    .flash_a(flash_a),  // Flash 地址，a0 仅在 8bit 模式有效，16bit 模式无意义
+    .flash_d(flash_d),  // Flash 数据
+    .flash_rp_n(flash_rp_n),  // Flash 复位信号，低有效
+    .flash_vpen(flash_vpen),  // Flash 写保护信号，低电平时不能擦除、烧写
+    .flash_ce_n(flash_ce_n),  // Flash 片选信号，低有效
+    .flash_oe_n(flash_oe_n),  // Flash 读使能信号，低有效
+    .flash_we_n(flash_we_n),  // Flash 写使能信号，低有效
+    .flash_byte_n(flash_byte_n), // Flash 8bit 模式选择，低有效。在使用 flash 的 16 位模式时请设为 1
+
+    .local_intr(local_intr)
   );
 
   register_file registers(
@@ -295,24 +308,13 @@ module stage_6_top (
     .clk(sys_clk),
     .rst(sys_rst),
     
-    /*.dau_instr_re_o  (dau_instr_re  ),
-    .dau_instr_addr_o(dau_instr_addr),
-    .dau_instr_data_i(dau_instr_data),
-    .dau_instr_ack_i (dau_instr_ack ),*/
-    
     .dau_instr_re_o  (i_cache_re),
     .dau_instr_addr_o(i_cache_addr),
     .dau_instr_ack_i (i_cache_ack),
     .dau_instr_data_i(i_cache_data),
     .dau_instr_bypass_o(i_cache_bypass),
     .dau_instr_cache_invalidate(i_cache_invalidate),
-    /*.dau_we_o   (dau_we        ),
-    .dau_re_o   (dau_re        ),
-    .dau_addr_o (dau_addr      ),
-    .dau_byte_en(dau_byte_en   ),
-    .dau_data_i (dau_data_read ),
-    .dau_data_o (dau_data_write),
-    .dau_ack_i  (dau_ack       ),*/
+
     .dau_we_o   (d_cache_we),
     .dau_re_o   (d_cache_re),
     .dau_addr_o (d_cache_addr),
@@ -342,6 +344,9 @@ module stage_6_top (
 
     .step(step),
     .dip_sw(dip_sw),
-    .curr_ip_out(leds)
+    .curr_ip_out(leds),
+
+    .local_intr(local_intr),
+    .mtime(dau.clint.mtime)
   );
 endmodule

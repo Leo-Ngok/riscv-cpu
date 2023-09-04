@@ -40,21 +40,25 @@ module if_id(
     output reg        id_jump_pred,
 
     input wire [31:0] if_instr,
-    output reg [31:0] id_instr 
+    output reg [31:0] id_instr,
+
+    input wire [31:0] bubble_ip 
 );
     parameter NOP = 32'b0000_0000_0000_0000_0000_0000_0001_0011;
     parameter INSTR_BASE_ADDR = 32'h8000_0000;
     always_ff @(posedge clock or posedge reset) begin
         if(reset) begin
+            id_ip    <= INSTR_BASE_ADDR;
+            id_jump_pred <= 1'b0;
             id_instr <= NOP;
             error    <=  1'b0;
         end else begin
             // error <= stall && bubble;
             if(bubble) begin
-                id_ip        <= INSTR_BASE_ADDR;
+                id_ip        <= bubble_ip;
                 id_jump_pred <= 1'b0;
                 id_instr     <= NOP;
-
+                
             end else if(!stall) begin
                 id_ip        <= if_ip;
                 id_jump_pred <= if_jump_pred;
@@ -125,7 +129,9 @@ module id_ex(
     output reg        ex_we,
 
     input wire [ 4:0] id_wraddr,
-    output reg [ 4:0] ex_wraddr
+    output reg [ 4:0] ex_wraddr,
+
+    input wire [31:0] bubble_ip
 );
     parameter NOP = 32'b0000_0000_0000_0000_0000_0000_0001_0011;
     parameter INSTR_BASE_ADDR = 32'h8000_0000;
@@ -161,7 +167,7 @@ module id_ex(
             if(bubble) begin
                 // NOP = addi x0, x0, 0
                 // 0. Control
-                // ex_ip       <= INSTR_BASE_ADDR; No, don't do this
+                ex_ip       <= bubble_ip;
                 ex_jump_pred <= 1'b0;
                 ex_instr    <= NOP;
 
@@ -210,59 +216,6 @@ module id_ex(
                 // 3. Write back
                 ex_we       <= id_we;
                 ex_wraddr   <= id_wraddr;
-            end
-        end 
-    end
-endmodule
-
-module ex_wb(
-    input wire clock,
-    input wire reset,
-
-    input wire stall,
-    input wire bubble,
-    output reg error,
-
-    input wire ex_we,
-    output reg wb_we,
-
-    input wire [ 4:0] ex_wraddr,
-    output reg [ 4:0] wb_wraddr,
-
-    input wire [31:0] ex_wdata,
-    output reg [31:0] wb_wdata,
-
-    // For your convenience to debug.
-    input wire [31:0] ex_instr,
-    output reg [31:0] wb_instr
-);
-
-    parameter NOP = 32'b0000_0000_0000_0000_0000_0000_0001_0011;
-
-    always_ff @(posedge clock or posedge reset) begin
-        if(reset) begin
-            wb_we       <= 1'b1;
-            wb_wraddr   <= 5'b0;
-            wb_wdata    <= 32'b0;
-            error <= 1'b0;
-
-            wb_instr <= NOP;
-        end else begin
-            
-            error <= stall && bubble;
-            if(bubble) begin
-                // NOP = addi x0, x0, 0
-                wb_we <= 1'b1;
-                wb_wraddr <= 5'b0;
-                wb_wdata <= 32'b0;
-
-                wb_instr <= NOP;
-            end else if(!stall) begin
-                wb_we       <= ex_we;
-                wb_wraddr   <= ex_wraddr;
-                wb_wdata    <= ex_wdata;
-
-                wb_instr <= ex_instr;
             end
         end 
     end
@@ -320,7 +273,9 @@ module ex_mem(
     output reg [ 4:0] mem_wraddr,
 
     input wire [31:0]  ex_wdata,
-    output reg [31:0] mem_wdata
+    output reg [31:0] mem_wdata,
+
+    input wire [31:0] bubble_ip
 );
     parameter NOP = 32'b0000_0000_0000_0000_0000_0000_0001_0011;
     parameter INSTR_BASE_ADDR = 32'h8000_0000;
@@ -354,6 +309,7 @@ module ex_mem(
         end else begin
             error <= stall && bubble;
             if(bubble) begin
+                mem_ip     <= bubble_ip;
                 // 1. Device
                 mem_mre    <=  1'b0;
                 mem_mwe    <=  1'b0;
@@ -420,6 +376,7 @@ module mem_wb(
     // For your convenience to debug
     input wire [31:0] mem_instr,
     output reg [31:0]  wb_instr
+
 );
     parameter NOP = 32'b0000_0000_0000_0000_0000_0000_0001_0011;
     always_ff @(posedge clock or posedge reset) begin

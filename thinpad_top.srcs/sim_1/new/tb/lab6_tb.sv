@@ -3,47 +3,47 @@ module lab6_tb;
 
   wire clk_50M, clk_11M0592;
 
-  reg push_btn;   // BTN5 按钮开关，带消抖电路，按下时为 1
-  reg reset_btn;  // BTN6 复位按钮，带消抖电路，按下时为 1
+  reg push_btn;   // BTN5 ??????????????? 1
+  reg reset_btn;  // BTN6 ??????????????? 1
 
-  reg [3:0] touch_btn; // BTN1~BTN4，按钮开关，按下时为 1
-  reg [31:0] dip_sw;   // 32 位拨码开关，拨到“ON”时为 1
+  reg [3:0] touch_btn; // BTN1~BTN4?????????? 1
+  reg [31:0] dip_sw;   // 32 ?????????ON??? 1
 
-  wire [15:0] leds;  // 16 位 LED，输出时 1 点亮
-  wire [7:0] dpy0;   // 数码管低位信号，包括小数点，输出 1 点亮
-  wire [7:0] dpy1;   // 数码管高位信号，包括小数点，输出 1 点亮
+  wire [15:0] leds;  // 16 ? LED???? 1 ??
+  wire [7:0] dpy0;   // ???????????????? 1 ??
+  wire [7:0] dpy1;   // ???????????????? 1 ??
 
-  wire [31:0] base_ram_data;  // BaseRAM 数据，低 8 位与 CPLD 串口控制器共享
-  wire [19:0] base_ram_addr;  // BaseRAM 地址
-  wire[3:0] base_ram_be_n;    // BaseRAM 字节使能，低有效。如果不使用字节使能，请保持为 0
-  wire base_ram_ce_n;  // BaseRAM 片选，低有效
-  wire base_ram_oe_n;  // BaseRAM 读使能，低有效
-  wire base_ram_we_n;  // BaseRAM 写使能，低有效
+  wire [31:0] base_ram_data;  // BaseRAM ???? 8 ?? CPLD ???????
+  wire [19:0] base_ram_addr;  // BaseRAM ??
+  wire[3:0] base_ram_be_n;    // BaseRAM ??????????????????????? 0
+  wire base_ram_ce_n;  // BaseRAM ??????
+  wire base_ram_oe_n;  // BaseRAM ???????
+  wire base_ram_we_n;  // BaseRAM ???????
 
-  wire [31:0] ext_ram_data;  // ExtRAM 数据
-  wire [19:0] ext_ram_addr;  // ExtRAM 地址
-  wire[3:0] ext_ram_be_n;    // ExtRAM 字节使能，低有效。如果不使用字节使能，请保持为 0
-  wire ext_ram_ce_n;  // ExtRAM 片选，低有效
-  wire ext_ram_oe_n;  // ExtRAM 读使能，低有效
-  wire ext_ram_we_n;  // ExtRAM 写使能，低有效
+  wire [31:0] ext_ram_data;  // ExtRAM ??
+  wire [19:0] ext_ram_addr;  // ExtRAM ??
+  wire[3:0] ext_ram_be_n;    // ExtRAM ??????????????????????? 0
+  wire ext_ram_ce_n;  // ExtRAM ??????
+  wire ext_ram_oe_n;  // ExtRAM ???????
+  wire ext_ram_we_n;  // ExtRAM ???????
 
-  wire txd;  // 直连串口发送端
-  wire rxd;  // 直连串口接收端
+  wire txd;  // ???????
+  wire rxd;  // ???????
 
-  // CPLD 串口
-  wire uart_rdn;  // 读串口信号，低有效
-  wire uart_wrn;  // 写串口信号，低有效
-  wire uart_dataready;  // 串口数据准备好
-  wire uart_tbre;  // 发送数据标志
-  wire uart_tsre;  // 数据发送完毕标志
+  // CPLD ??
+  wire uart_rdn;  // ?????????
+  wire uart_wrn;  // ?????????
+  wire uart_dataready;  // ???????
+  wire uart_tbre;  // ??????
+  wire uart_tsre;  // ????????
 
-  // Windows 需要注意路径分隔符的转义，例如 "D:\\foo\\bar.bin"
-  // parameter BASE_RAM_INIT_FILE = "D:\\github\\THU_PASS\\Organization\\supervisor-rv\\kernel\\kernel.bin";//\\base_test_new.bin"; //"/tmp/main.bin";//"/tmp/main.bin"; // BaseRAM 初始化文件，请修改为实际的绝对路�?? "D:\\downloads\\kernel-rv32-int.bin";
-  // parameter EXT_RAM_INIT_FILE = "/tmp/eram.bin";  // ExtRAM 初始化文件，请修改为实际的绝对路径
+  // Windows ??????????????? "D:\\foo\\bar.bin"
+  // parameter BASE_RAM_INIT_FILE = "D:\\github\\THU_PASS\\Organization\\supervisor-rv\\kernel\\kernel.bin";//\\base_test_new.bin"; //"/tmp/main.bin";//"/tmp/main.bin"; // BaseRAM ??????????????????? "D:\\downloads\\kernel-rv32-int.bin";
+  // parameter EXT_RAM_INIT_FILE = "/tmp/eram.bin";  // ExtRAM ?????????????????
   parameter BASE_RAM_INIT_FILE = "D:\\github\\ucore_os_lab\\labcodes_answer\\lab8\\bin\\rbl.img";
-  parameter EXT_RAM_INIT_FILE = "D:\\github\\ucore_os_lab\\labcodes_answer\\lab8\\bin\\ucore.img";
+  parameter EXT_RAM_INIT_FILE = "D:\\github\\ucore_os_lab\\labcodes_answer\\lab1\\bin\\ucore.img";
   initial begin
-    // 在这里可以自定义测试输入序列，例如：
+    // ??????????????????
     dip_sw = 32'h8000_1000;//2;
     touch_btn = 0;
     reset_btn = 0;
@@ -148,69 +148,69 @@ module lab6_tb;
 // //      0x80100004:     f5250513        addi    a0,a0,-174
 // //      0x80100008:     00008067        ret
 
-//     // to write an int to memory, send the following uart sequence.
-//     // A
-//     // address, 32 bit
-//     // 00000004
-//     // instruction.
+    // to write an int to memory, send the following uart sequence.
+    // A
+    // address, 32 bit
+    // 00000004
+    // instruction.
 
-//     // first, send lui a0, 0x1c
-//     uart.pc_send_byte(8'h41); // A
-//     uart.pc_send_byte(8'h00); // ADDRESS
-//     uart.pc_send_byte(8'h00);
-//     uart.pc_send_byte(8'h10);
-//     uart.pc_send_byte(8'h80);
-//     uart.pc_send_byte(8'h04); // 4
-//     uart.pc_send_byte(8'h00);
-//     uart.pc_send_byte(8'h00);
-//     uart.pc_send_byte(8'h00);
-//     uart.pc_send_byte(8'h37); // instruction
-//     uart.pc_send_byte(8'hc5);
-//     uart.pc_send_byte(8'h01);
-//     uart.pc_send_byte(8'h00);
+    // first, send lui a0, 0x1c
+    // uart.pc_send_byte(8'h41); // A
+    // uart.pc_send_byte(8'h00); // ADDRESS
+    // uart.pc_send_byte(8'h00);
+    // uart.pc_send_byte(8'h10);
+    // uart.pc_send_byte(8'h80);
+    // uart.pc_send_byte(8'h04); // 4
+    // uart.pc_send_byte(8'h00);
+    // uart.pc_send_byte(8'h00);
+    // uart.pc_send_byte(8'h00);
+    // uart.pc_send_byte(8'h37); // instruction
+    // uart.pc_send_byte(8'hc5);
+    // uart.pc_send_byte(8'h01);
+    // uart.pc_send_byte(8'h00);
     
-//     // send addi a0,a0,-174
-//     uart.pc_send_byte(8'h41); // A
-//     uart.pc_send_byte(8'h04); // ADDRESS
-//     uart.pc_send_byte(8'h00);
-//     uart.pc_send_byte(8'h10);
-//     uart.pc_send_byte(8'h80);
-//     uart.pc_send_byte(8'h04); // 4
-//     uart.pc_send_byte(8'h00);
-//     uart.pc_send_byte(8'h00);
-//     uart.pc_send_byte(8'h00);
-//     uart.pc_send_byte(8'h13); // instruction
-//     uart.pc_send_byte(8'h05);
-//     uart.pc_send_byte(8'h25);
-//     uart.pc_send_byte(8'hf5);
+    // // send addi a0,a0,-174
+    // uart.pc_send_byte(8'h41); // A
+    // uart.pc_send_byte(8'h04); // ADDRESS
+    // uart.pc_send_byte(8'h00);
+    // uart.pc_send_byte(8'h10);
+    // uart.pc_send_byte(8'h80);
+    // uart.pc_send_byte(8'h04); // 4
+    // uart.pc_send_byte(8'h00);
+    // uart.pc_send_byte(8'h00);
+    // uart.pc_send_byte(8'h00);
+    // uart.pc_send_byte(8'h13); // instruction
+    // uart.pc_send_byte(8'h05);
+    // uart.pc_send_byte(8'h25);
+    // uart.pc_send_byte(8'hf5);
 
-//     // ret
-//     uart.pc_send_byte(8'h41); // A
-//     uart.pc_send_byte(8'h08); // ADDRESS
-//     uart.pc_send_byte(8'h00);
-//     uart.pc_send_byte(8'h10);
-//     uart.pc_send_byte(8'h80);
-//     uart.pc_send_byte(8'h04); // 4
-//     uart.pc_send_byte(8'h00);
-//     uart.pc_send_byte(8'h00);
-//     uart.pc_send_byte(8'h00);
-//     uart.pc_send_byte(8'h67); // instruction
-//     uart.pc_send_byte(8'h80);
-//     uart.pc_send_byte(8'h00);
-//     uart.pc_send_byte(8'h00);
+    // // ret
+    // uart.pc_send_byte(8'h41); // A
+    // uart.pc_send_byte(8'h08); // ADDRESS
+    // uart.pc_send_byte(8'h00);
+    // uart.pc_send_byte(8'h10);
+    // uart.pc_send_byte(8'h80);
+    // uart.pc_send_byte(8'h04); // 4
+    // uart.pc_send_byte(8'h00);
+    // uart.pc_send_byte(8'h00);
+    // uart.pc_send_byte(8'h00);
+    // uart.pc_send_byte(8'h67); // instruction
+    // uart.pc_send_byte(8'h80);
+    // uart.pc_send_byte(8'h00);
+    // uart.pc_send_byte(8'h00);
 
 
-//     uart.pc_send_byte(8'h47); // G = 47, T = 54, A = 41
-//     // 0x800010a8 <UTEST_PUTC>
-//     // 0x80001080 <UTEST_4MDCT>
-//     uart.pc_send_byte(8'h00);
-//     uart.pc_send_byte(8'h00);
-//     uart.pc_send_byte(8'h00);
-//     uart.pc_send_byte(8'h00);
-    #10000 $finish;
+    // uart.pc_send_byte(8'h47); // G = 47, T = 54, A = 41
+    // // 0x800010a8 <UTEST_PUTC>
+    // // 0x80001080 <UTEST_4MDCT>
+    // uart.pc_send_byte(8'ha8);
+    // uart.pc_send_byte(8'h10);
+    // uart.pc_send_byte(8'h00);
+    // uart.pc_send_byte(8'h80);
+    #2000000000 $finish;
   end
 
-  // 待测试用户设计
+  // ???????
   stage_6_top dut (
       .clk_50M(clk_50M),
       .clk_11M0592(clk_11M0592),
@@ -250,13 +250,13 @@ module lab6_tb;
       .flash_we_n()
   );
 
-  // 时钟源
+  // 时钟�?
   clock osc (
       .clk_11M0592(clk_11M0592),
       .clk_50M    (clk_50M)
   );
 
-  // CPLD 串口仿真模型
+  // CPLD ??????
   cpld_model cpld (
       .clk_uart(clk_11M0592),
       .uart_rdn(uart_rdn),
@@ -266,12 +266,12 @@ module lab6_tb;
       .uart_tsre(uart_tsre),
       .data(base_ram_data[7:0])
   );
-  // 直连串口仿真模型
+  // ????????
   uart_model uart (
     .rxd (txd),
     .txd (rxd)
   );
-  // BaseRAM 仿真模型
+  // BaseRAM ????
   sram_model base1 (
       .DataIO(base_ram_data[15:0]),
       .Address(base_ram_addr[19:0]),
@@ -290,7 +290,7 @@ module lab6_tb;
       .LB_n(base_ram_be_n[2]),
       .UB_n(base_ram_be_n[3])
   );
-  // ExtRAM 仿真模型
+  // ExtRAM ????
   sram_model ext1 (
       .DataIO(ext_ram_data[15:0]),
       .Address(ext_ram_addr[19:0]),
@@ -310,7 +310,7 @@ module lab6_tb;
       .UB_n(ext_ram_be_n[3])
   );
 
-  // 从文件加载 BaseRAM
+  // 从文件加�? BaseRAM
   initial begin
     reg [31:0] tmp_array[0:1048575];
     integer n_File_ID, n_Init_Size;
@@ -332,7 +332,7 @@ module lab6_tb;
     end
   end
 
-  // 从文件加载 ExtRAM
+  // 从文件加�? ExtRAM
   initial begin
     reg [31:0] tmp_array[0:1048575];
     integer n_File_ID, n_Init_Size;

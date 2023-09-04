@@ -21,7 +21,9 @@ module mmu(
     input  wire        data_ack_i,
 
     output wire        bypass,
-    input  wire        invalidate_tlb
+    input  wire        invalidate_tlb,
+
+    output wire        page_fault
 );
     typedef enum logic [3:0] { 
         WAIT, FETCH_ROOT_PAGE, FETCH_2ND_PAGE, DATA_ACCESS
@@ -47,6 +49,10 @@ module mmu(
 
     wire tlb_valid;
     wire [31:0] tlb_pte;
+
+    reg [31:0] va_req;
+
+    reg         page_fault_marker;
     always_comb begin
         acc = (mmu_enable) && (data_we_i || data_re_i);
         next_state = WAIT;
@@ -62,14 +68,22 @@ module mmu(
         end
         FETCH_ROOT_PAGE: begin
             if(data_ack_i) begin
-                next_state = FETCH_2ND_PAGE;
+                if(page_fault_marker == 1) begin
+                    next_state = WAIT;
+                end else begin
+                    next_state = FETCH_2ND_PAGE;
+                end
             end else begin
                 next_state = FETCH_ROOT_PAGE;
             end
         end
         FETCH_2ND_PAGE: begin
             if(data_ack_i) begin
-                next_state = DATA_ACCESS;
+                if(page_fault_marker == 1) begin
+                    next_state = WAIT;
+                end else begin
+                    next_state = DATA_ACCESS;
+                end
             end else begin
                 next_state = FETCH_2ND_PAGE;
             end
@@ -82,6 +96,9 @@ module mmu(
             end
         end
         endcase
+        if(va_req != va) begin
+            next_state = WAIT;
+        end
     end
 
     reg        data_re_comb;
@@ -113,6 +130,9 @@ module mmu(
         tlb_we = 0;
         tlb_wpte = 32'b0;
         tlb_wva = 32'b0;
+        
+        page_fault_marker = 0;
+        
         case(mmu_state)
         WAIT: begin
             if(tlb_valid) begin
@@ -132,15 +152,26 @@ module mmu(
             data_be_comb = 4'b1111;
             data_pa_comb = { satp[19:0], va[31:22], 2'b0 };
             bypass_comb = 1;
+            if(data_ack_i) begin
+                if(data_arrival_i[0] == 1'b0) begin // Root page pte page fault.
+                    page_fault_marker = 1;
+                end
+            end
         end
         FETCH_2ND_PAGE: begin
             data_re_comb = 1;
             data_be_comb = 4'b1111;
             data_pa_comb = { second_page_pte_reg[29:10], va[21:12], 2'b0 };
             bypass_comb = 1;
-            tlb_we = 1;
-            tlb_wpte = data_arrival_i;
-            tlb_wva = va;
+            if(data_ack_i) begin
+                if(data_arrival_i[0] == 1'b0) begin // Leaf page pte page fault.
+                    page_fault_marker = 1;
+                end else begin
+                    tlb_we = 1;
+                    tlb_wpte = data_arrival_i;
+                    tlb_wva = va;
+                end
+            end
         end 
         DATA_ACCESS: begin
             data_re_comb = data_re_i;
@@ -160,17 +191,28 @@ module mmu(
         if(reset) begin
             data_page_pte_reg <= 32'b0;
             second_page_pte_reg <= 32'b0;
+            va_req <= 32'b0;
         end else begin
             case(mmu_state)
+            WAIT: begin
+            if(acc
+            && !tlb_valid
+            ) begin
+                va_req <= va;
+            end
+            end
             FETCH_ROOT_PAGE: begin
                 if(data_ack_i) begin
                     second_page_pte_reg <= data_arrival_i;
-                end
+                end 
             end
             FETCH_2ND_PAGE: begin
                 if(data_ack_i) begin
                     data_page_pte_reg <= data_arrival_i;
                 end
+            end
+            DATA_ACCESS: begin
+                
             end
             endcase
         end
@@ -186,6 +228,8 @@ module mmu(
     assign data_ack_o = mmu_enable ? data_ack_comb : data_ack_i;
     assign data_arrival_o = mmu_enable ? data_arrival_comb : data_arrival_i;
     assign bypass = mmu_enable ? bypass_comb : 1'b0;
+
+    assign page_fault = page_fault_marker;
 
     tlb buffer(
         .clock(clock),

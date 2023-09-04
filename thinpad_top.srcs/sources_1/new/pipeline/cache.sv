@@ -28,7 +28,7 @@ module cache(
     parameter VALID_ADDR_WIDTH = 21; 
     parameter SET_COUNT = 8;
     parameter N_WAYS = 4;
-    parameter BLOCK_COUNT = 16;
+    parameter BLOCK_COUNT = 8;
 
     parameter SET_WIDTH = $clog2(SET_COUNT);
     parameter BLOCK_WIDTH = $clog2(BLOCK_COUNT);
@@ -123,6 +123,8 @@ module cache(
     reg [SET_WIDTH - 1:0] flush_set_reg;
     reg [N_WAY_BW  - 1:0] flush_way_reg;
     reg [TAG_WIDTH - 1:0] flush_way_tag;
+
+    reg [31:0] miss_addr_reg;
     always_ff @(posedge reset or posedge clock) begin
         if(reset) begin
             int i_set;
@@ -144,6 +146,7 @@ module cache(
             flush_set_reg <=  { SET_WIDTH {1'b0} };
             flush_way_reg <= { N_WAY_BW {1'b0} };
             flush_way_tag <= { TAG_WIDTH {1'b0} };
+            miss_addr_reg <= 32'b0;
         end else begin
                 case(state) 
                 WAIT: begin
@@ -159,6 +162,7 @@ module cache(
                     end
                     else if((cu_we||cu_re) && !cache_hit) begin
                         if(!bypass_internal) begin
+                            miss_addr_reg <= cu_addr;
                             cache_regs[set_idx].way_arr[fetch_way_idx_comb].valid <= 1'b0;
                             fetch_way_idx_reg <= fetch_way_idx_comb;
                             fetch_block_idx <= { BLOCK_WIDTH{1'b0} };
@@ -227,6 +231,7 @@ module cache(
                     end
                 end
                 FETCHING_BLOCKS: begin
+                    if(cu_addr == miss_addr_reg) begin
                     if((cu_we||cu_re)) begin
                     if(dau_ack) begin
                         if(fetch_block_idx == BLOCK_COUNT - 1) begin
@@ -243,6 +248,10 @@ module cache(
                         // in case a mispredicted branch loading, evacuate immediately.
                         state <= WAIT;
                         fetch_block_idx <= 0;
+                    end
+                    end else begin
+                        fetch_block_idx <= 0;
+                        state <= WAIT;
                     end
                 end
                 FLUSH_BLOCKS: begin
@@ -306,12 +315,12 @@ module cache(
             //    cu_addr       tag   fetch block
             // WARNING: Do not use cu_addr directly, since you are not writing the block you request
             // to write. The block to be spilt is the victim block with lowest lru.
-            dau_addr_comb = { cu_addr[31:20], cache_regs[set_idx].way_arr[fetch_way_idx_reg].tag, fetch_block_idx, 2'b0 };
+            dau_addr_comb = { cu_addr[31:2 + BLOCK_WIDTH + TAG_WIDTH], cache_regs[set_idx].way_arr[fetch_way_idx_reg].tag, fetch_block_idx, 2'b0 };
             dau_data_departure_comb = cache_regs[set_idx].way_arr[fetch_way_idx_reg].blocks[fetch_block_idx];
         end
         FETCHING_BLOCKS: begin
             dau_re_comb = 1'b1;
-            dau_addr_comb = { cu_addr[31:6], fetch_block_idx, 2'b0 };
+            dau_addr_comb = { cu_addr[31: 2 + BLOCK_WIDTH], fetch_block_idx, 2'b0 };
         end
         FLUSH_BLOCKS: begin
             dau_we_comb = 1'b1;

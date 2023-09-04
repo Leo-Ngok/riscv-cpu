@@ -16,10 +16,10 @@ module next_instr_ptr(
     parameter MRET   =  32'b0011000_00010_00000_000_00000_111_0011;
     parameter SRET   =  32'b0001000_00010_00000_000_00000_111_0011;
     parameter HALT = 32'b0;
-    reg [13:0] lo_off;
+    reg [31:0] branch_ip;
     always_comb begin
         jump_pred = 0;
-        lo_off = 14'b0;
+        branch_ip = 32'b0;
         // if(mem_ack) begin
         casez(curr_instr) 
         HALT: begin
@@ -33,14 +33,21 @@ module next_instr_ptr(
             // Forward not taken.
             // For example, beqz x0, offset is always taken.
             // bnez x0, offset is never taken.
-            lo_off = { 1'b0, curr_ip[12:0] } 
-            + {1'b0, curr_instr[31], curr_instr[7], 
-            curr_instr[30:25], curr_instr[11:8], 1'b0};
-            jump_pred = lo_off[13];
-            if(jump_pred)
-                next_ip_pred = {curr_ip[31:13], lo_off[12:0]};
-            else
+            // in the instruction,
+            // imm[12|10:5]|rs2, rs1| fn3 | imm[4:1|11] | opcode
+            // lower 13 bits are provided, so sign extend the upper 19 bits.
+            // 12 -> 31
+            // 11 -> 7
+            // 10:5 -> 30:25
+            // 4:1 -> 11:8
+                                         // 31:13              12               11           10:5                4:1
+            branch_ip = curr_ip + { {19{curr_instr[31]}}, curr_instr[31], curr_instr[7], curr_instr[30:25], curr_instr[11:8], 1'b0};
+            if(branch_ip <= curr_ip) begin
+                next_ip_pred = branch_ip;
+                jump_pred = 1;
+            end else begin
                 next_ip_pred = curr_ip + 32'd4;
+            end
         end
         JAL: begin
             // Refer to ISA p.16.

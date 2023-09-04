@@ -16,7 +16,7 @@ module tlb(
 );
     parameter XLEN = 32;
     parameter PGSIZE = 4096;
-    parameter SET_COUNT = 16;
+    parameter SET_COUNT = 8;
     parameter N_WAYS = 4;
 
     parameter PGBITS = $clog2(PGSIZE);

@@ -10,14 +10,22 @@ module csr(
     input  wire        timer_interrupt, // TIME'S UP!
 
     output wire       take_ip,
-    output wire [31:0] new_ip
+    output wire [31:0] new_ip,
+
+    input wire instr_page_fault,
+    input wire data_page_fault,
+
+    input wire [31:0] instr_fault_addr,
+    input wire [31:0] data_fault_addr,
+
+    input wire [63:0] mtime
 );
     typedef enum logic [1:0] { 
         USER, SUPERVISOR, HYPERVISOR, MACHINE 
     } priv_mode_t;
     priv_mode_t privilege;
     /* Let's do these first.
-    还需要实现 CSR 寄存器的这些字段：
+    ????? CSR ?????????
     1. mtvec: BASE, MODE
     2. mscratch
     3. mepc
@@ -59,12 +67,6 @@ module csr(
     // SUPERVISOR PROTECTION AND TRANSLATION
     reg [31:0] satp;     // 0X180, Supervisor address translation and protection.
 
-    // machine time registers
-    // Access it by address, do not try
-    // to get it here.
-    reg [63:0] mtime;
-    reg [63:0] mtimecmp;
-
     parameter SYSTEM = 32'b????_????_????_????_????_????_?1110011;
     parameter CSRRW  = 32'b????_????_????_?????_001_?????_1110011;
     parameter CSRRS  = 32'b????_????_????_?????_010_?????_1110011;
@@ -99,8 +101,21 @@ module csr(
         12'h343: rdata_comb = mtval;
         12'h344: rdata_comb = mip; 
 
+        12'h100: rdata_comb = sstatus;
+        12'h104: rdata_comb = mie; // sie shares the same register as mie.
+        12'h105: rdata_comb = stvec;
+        
+        12'h140: rdata_comb = sscratch;
+        12'h141: rdata_comb = sepc;
+        12'h142: rdata_comb = scause;
+        12'h143: rdata_comb = stval;
+        12'h144: rdata_comb = mip; // sip shares the same register as mip.
         // no, you should always 'handle' interrupt first.
         12'h180: rdata_comb = satp;
+
+        12'hc01: rdata_comb = mtime[31:0];
+        12'hc80: rdata_comb = mtime[63:32];
+
         default: rdata_comb = 32'b0;
         endcase
     end
@@ -134,10 +149,10 @@ module csr(
             mideleg[0]};
         // mie: MTIE only for monitor
         // Support for MSIE is provided for bootloader (though useless)
-        12'h304: wdata_comb = {
+        12'h304: wdata_comb = wdata_internal; /*{
             mie[31: 8], wdata_internal[7], // MTIE
             mie[6:4], wdata_internal[3],   // MSIE
-            mie[2:0]};
+            mie[2:0]};*/
         // mtvec
         12'h305: wdata_comb = wdata_internal;
 
@@ -151,7 +166,46 @@ module csr(
         12'h343: wdata_comb = wdata_internal;
         // mip: MTIP only for monitor
         // add support for MSIP, since MSIE is set by bootloader.
-        12'h344: wdata_comb = {mip[31: 8], wdata_internal[7], mip[6:4], wdata_internal[3], mip[2:0]};
+        12'h344: wdata_comb = wdata_internal; /*{
+            mip[31: 4],// wdata_internal[7], 
+            //mip[6:4], 
+            wdata_internal[3], 
+            mip[2:0]};*/
+        
+        // sstatus
+        // Disassemble uCore and you'll realize that
+        // only sie(1), spp(8) and sum(18) are needed
+        12'h100: wdata_comb = {
+            mstatus[31:19], wdata_internal[18], 
+            mstatus[17: 9], wdata_internal[ 8],
+            mstatus[ 7: 2], wdata_internal[ 1],
+            mstatus[0]
+        };
+        // sie
+        // only ssie(1) and stie(5) are needed.
+        12'h104: wdata_comb = wdata_internal; /*{
+            mie[31:6], wdata_internal[5],
+            mie[4:2], wdata_internal[1],
+            mie[0]
+        };*/
+        // stvec
+        12'h105: wdata_comb = wdata_internal;
+
+        // sscratch
+        12'h140: wdata_comb = wdata_internal;
+        // sepc
+        12'h141: wdata_comb = wdata_internal;
+        // scause
+        12'h142: wdata_comb = wdata_internal;
+        // stval
+        12'h143: wdata_comb = wdata_internal;
+        // sip
+        12'h144: wdata_comb = wdata_internal; /*{
+            mip[31:6], wdata_internal[5],
+            mip[4:2], wdata_internal[1],
+            mip[0]
+        };*/
+
         // satp
         12'h180: wdata_comb = wdata_internal;
         default: wdata_comb = 32'b0;
@@ -161,6 +215,10 @@ module csr(
 
     reg [31:0] mstatus_comb;
     reg [31:0] mcause_comb;
+
+    reg [31:0] sstatus_comb;
+    reg [31:0] cause_comb;
+    reg [31:0] intr_pending_comb;
     priv_mode_t next_priv;
 
     reg       take_ip_comb;
@@ -169,67 +227,16 @@ module csr(
     always_comb begin
         mcause_comb = 32'b0;
         mstatus_comb = mstatus;
+        
+        sstatus_comb = 32'b0;
+        cause_comb = 32'hffffffff;
+
         next_priv = privilege;
         take_ip_comb = 0;
         new_ip_comb = 32'h8000_0000;
+        
+        intr_pending_comb = mip;
         casez(instr)
-        ECALL, EBREAK: begin
-            // volume 2 p.39
-            take_ip_comb = 1;
-            
-
-            case(privilege)
-            USER: begin 
-                mcause_comb = 32'd8;
-            end
-            SUPERVISOR: begin
-                mcause_comb = 32'd9;
-            end
-            HYPERVISOR: begin 
-                mcause_comb = 32'd10; // Deprecated 
-            end
-            MACHINE: begin 
-                mcause_comb = 32'd11; 
-            end
-            endcase
-
-            
-            if(instr == EBREAK) 
-                mcause_comb = 32'd3;
-
-
-            if(privilege != MACHINE && medeleg[mcause_comb[5:0]]) begin
-                next_priv = SUPERVISOR;
-                new_ip_comb = {stvec[31:2], 2'b0};
-            end else begin
-                next_priv = MACHINE;
-                new_ip_comb = {mtvec[31:2], 2'b0};
-            end
-
-            case(next_priv) 
-            USER: begin // Impossible
-            end
-            SUPERVISOR: begin 
-                mstatus_comb = {
-                    mstatus[31:9], privilege[0],
-                    mstatus[7:6], mstatus[1],
-                    mstatus[4:2], 1'b0,
-                    mstatus[0]
-                };
-            end
-            HYPERVISOR: begin // Deprecated
-            end
-            MACHINE: begin 
-                mstatus_comb = {
-                    mstatus[31:13], unsigned'(privilege), 
-                    mstatus[10: 8], mstatus[3], 
-                    mstatus[ 6: 4], 1'b0, 
-                    mstatus[ 2: 0]
-                };
-            end
-            endcase
-
-        end
         MRET: begin
             take_ip_comb = 1;
             new_ip_comb = mepc;
@@ -242,13 +249,108 @@ module csr(
         end
         SRET: begin
             take_ip_comb = 1;
-            // new_ip_comb = sepc; TODO
-            mstatus_comb = {
-                mstatus[31:9], 1'b0,
-                mstatus[7:6], 1'b1,
-                mstatus[4:2], mstatus[5],
-                mstatus[0]
+            new_ip_comb = sepc;
+            sstatus_comb = {
+                sstatus[31:9], 1'b0,
+                sstatus[7:6], 1'b1,
+                sstatus[4:2], sstatus[5],
+                sstatus[0]
             };
+        end
+        default: begin
+                    
+            // ( ) 0 - instr address misaligned
+            // ( ) 1 - instr access fault
+            // ( ) 2 - illegal instr
+            // (v) 3 - breakpoint
+            // ( ) 4 - load addr misaligned
+            // ( ) 5 - load access fault
+            // ( ) 6 - store addrss misalgned
+            // ( ) 7 - store access fault
+            // ( ) 8 - ecall from U
+            // ( ) 9 - ecall from S
+            // ( ) 11 - ecall from M
+            // ( ) 12 - Instr page fault
+            // ( ) 13 - Load page fault
+            // ( ) 15 - store page fault
+
+            // handle ecall, then handle page fault.
+            if(!take_ip_comb && instr == ECALL) begin
+                case(privilege)
+                USER: begin 
+                    cause_comb = 32'd8;
+                end
+                SUPERVISOR: begin
+                    cause_comb = 32'd9;
+                end
+                HYPERVISOR: begin 
+                    cause_comb = 32'd10; // Deprecated 
+                end
+                MACHINE: begin 
+                    cause_comb = 32'd11; 
+                end
+                endcase
+                take_ip_comb = 1;
+            end
+            // ecall has higher priority than ebreak.
+            if(!take_ip_comb && instr == EBREAK) begin
+                cause_comb = 32'd3;
+                take_ip_comb = 1;
+            end
+            // page fault
+            if(!take_ip_comb && data_page_fault) begin
+                take_ip_comb = 1;
+                if(instr[6:0] == 7'b0000011) begin
+                    cause_comb = 32'd13; // load page fault.
+                end else if(instr[6:0] == 7'b0100011) begin
+                    cause_comb = 32'd15; // Store page fault.
+                end else begin // Illegal instruction.
+                    cause_comb = 32'd2;
+                end
+
+            end
+            // timer interrupt, refer to p.32, p.67 of volume 2
+            if(
+                !take_ip_comb && 
+                ((privilege == MACHINE && mstatus[3]) || privilege != MACHINE) &&
+                (mie[7] && mip[7]) &&
+                (mideleg[7] == 1'b0)
+            ) begin
+                take_ip_comb = 1;
+                cause_comb = 32'h8000_0007;
+                next_priv = MACHINE;
+            end
+            if(!take_ip_comb && 
+             ((privilege == SUPERVISOR && sstatus[1]) || privilege == USER) &&
+                    (mie[5] && mip[5]) 
+            ) begin
+                take_ip_comb = 1;
+                cause_comb = 32'h8000_0005;
+                next_priv = SUPERVISOR;
+            end
+
+            if(take_ip_comb) begin
+                if((privilege != MACHINE && medeleg[cause_comb[5:0]])||
+                (cause_comb[31] && next_priv == SUPERVISOR)) begin
+                    next_priv = SUPERVISOR;
+                    new_ip_comb = { stvec[31:2], 2'b0 };
+                    sstatus_comb = {
+                        sstatus[31:9], privilege[0],
+                        sstatus[7:6], sstatus[1],
+                        sstatus[4:2], 1'b0,
+                        sstatus[0]
+                    };
+                end else begin
+                    next_priv = MACHINE;
+                    new_ip_comb = { mtvec[31:2], 2'b0 };
+                    mstatus_comb = {
+                        mstatus[31:13], unsigned'(privilege), 
+                        mstatus[10: 8], mstatus[3], 
+                        mstatus[ 6: 4], 1'b0, 
+                        mstatus[ 2: 0]
+                    };
+                end
+            end
         end
         endcase
     end
@@ -286,6 +388,7 @@ module csr(
             satp    <= 32'b0;
 
         end else begin
+            mip[7] <= timer_interrupt;
             casez(instr)
             CSRRW, CSRRWI: begin
                 case(address) 
@@ -301,6 +404,17 @@ module csr(
                 12'h342: mcause     <= wdata_comb;
                 12'h343: mtval      <= wdata_comb;
                 12'h344: mip        <= wdata_comb;
+
+                12'h100: sstatus    <= wdata_comb;
+                12'h104: mie        <= wdata_comb; // shares with sie.
+                12'h105: stvec      <= wdata_comb;
+
+                12'h140: sscratch   <= wdata_comb;
+                12'h141: sepc       <= wdata_comb;
+                12'h142: scause     <= wdata_comb;
+                12'h143: stval      <= wdata_comb;
+                12'h144: mip        <= wdata_comb;
+
                 12'h180: satp       <= wdata_comb;
                 endcase
             end
@@ -318,6 +432,17 @@ module csr(
                 12'h342: mcause     <= mcause  | wdata_comb;
                 12'h343: mtval      <= mtval   | wdata_comb;
                 12'h344: mip        <= mip     | wdata_comb;
+
+                12'h100: sstatus    <= sstatus | wdata_comb;
+                12'h104: mie        <= mie     | wdata_comb;
+                12'h105: stvec      <= stvec   | wdata_comb;
+
+                12'h140: sscratch   <= sscratch| wdata_comb;
+                12'h141: sepc       <= sepc    | wdata_comb;
+                12'h142: scause     <= scause  | wdata_comb;
+                12'h143: stval      <= stval   | wdata_comb;
+                12'h144: mip        <= mip     | wdata_comb;
+
                 12'h180: satp       <= satp    | wdata_comb;
                 endcase
             end
@@ -335,16 +460,20 @@ module csr(
                 12'h342: mcause     <= mcause  & ~wdata_comb;
                 12'h343: mtval      <= mtval   & ~wdata_comb;
                 12'h344: mip        <= mip     & ~wdata_comb;
+
+                12'h100: sstatus    <= sstatus & ~wdata_comb;
+                12'h104: mie        <= mie     & ~wdata_comb;
+                12'h105: stvec      <= stvec   & ~wdata_comb;
+
+                12'h140: sscratch   <= sscratch& ~wdata_comb;
+                12'h141: sepc       <= sepc    & ~wdata_comb;
+                12'h142: scause     <= scause  & ~wdata_comb;
+                12'h143: stval      <= stval   & ~wdata_comb;
+                12'h144: mip        <= mip     & ~wdata_comb;
+
                 12'h180: satp       <= satp    & ~wdata_comb;
                 endcase
             end
-            ECALL, EBREAK: begin
-                privilege <= next_priv;
-                
-                mepc    <= curr_ip;
-                mstatus <= mstatus_comb;
-                mcause  <= mcause_comb;
-            end 
             MRET: begin
                 privilege <= priv_mode_t'(mstatus[12:11]);
                 mstatus <= mstatus_comb;
@@ -352,6 +481,23 @@ module csr(
             SRET: begin
                 privilege <= priv_mode_t'({1'b0, mstatus[8]});
                 mstatus <= mstatus_comb;
+            end
+            default: begin
+                if(take_ip_comb) begin
+                    privilege <= next_priv;
+                    if(next_priv == MACHINE) begin
+                        mepc    <= curr_ip;
+                        mstatus <= mstatus_comb;
+                        mcause  <= cause_comb;
+                    end else begin
+                        sepc    <= curr_ip;
+                        sstatus <= sstatus_comb;
+                        scause  <= cause_comb;
+                        if(data_page_fault) begin
+                            stval <= data_fault_addr;
+                        end
+                    end
+                end
             end
             endcase
         end
@@ -470,20 +616,6 @@ module csr(
 
     // wire [30:0] ex_code = mcause[30:0];
     // wire intr = mcause[31];
-    // 0 - instr address misaligned
-    // 1 - instr access fault
-    // 2 - illegal instr
-    // 3 - breakpoint
-    // 4 - load addr misaligned
-    // 5 - load access fault
-    // 6 - store addrss misalgned
-    // 7 - store access fault
-    // 8 - ecall from U
-    // 9 - ecall from S
-    // 11 - ecall from M
-    // 12 - Instr page fault
-    // 13 - Load page fault
-    // 15 - store page fault
 
     // for mtval, 
     // written with faulting eff address

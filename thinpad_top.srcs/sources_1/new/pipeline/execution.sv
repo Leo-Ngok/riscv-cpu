@@ -102,12 +102,7 @@ module adjust_ip(
                     // +------------------+----------+----------+--------+-------+----------+
                     // | i[12] | i[10:5] |  rs2  | rs1   | funct3 | i[4:1] | i[11] | opcode |
                     // +------------------+----------+----------+--------+-------+----------+
-                    new_ip = {
-                        curr_ip[31:13],
-                        curr_ip[12:0] + {
-                            instr[31], instr[7], instr[30:25], instr[11:8], 1'b0
-                        }
-                    };
+                    new_ip = curr_ip + { {19{instr[31]}}, instr[31], instr[7], instr[30:25], instr[11:8], 1'b0};
                 end else begin // predict jump, no jump needed
                     new_ip = curr_ip + 32'd4;
                 end
