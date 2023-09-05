@@ -1,0 +1,50 @@
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+ On branch dev
+ Changes to be committed:
+	renamed:    thinpad_top.ip_user_files/ip/mult_gen_0/mult_gen_0_stub.v -> thinpad_top.ip_user_files/ip/ila/ila_stub.v
+	modified:   thinpad_top.srcs/sim_1/new/tb/lab6_tb.sv
+	new file:   thinpad_top.srcs/sources_1/ip/ila/ila.xci
+	new file:   thinpad_top.srcs/sources_1/ip/ila/ila.xml
+	deleted:    thinpad_top.srcs/sources_1/ip/mult_gen_0/mult_gen_0.xci
+	deleted:    thinpad_top.srcs/sources_1/ip/mult_gen_0/mult_gen_0.xml
+	new file:   thinpad_top.srcs/sources_1/new/block_ram.sv
+	new file:   thinpad_top.srcs/sources_1/new/clint.sv
+	modified:   thinpad_top.srcs/sources_1/new/csr.sv
+	new file:   thinpad_top.srcs/sources_1/new/dau_gen.py
+	new file:   thinpad_top.srcs/sources_1/new/dau_unified.sv
+	new file:   thinpad_top.srcs/sources_1/new/device_access_mux.v
+	new file:   thinpad_top.srcs/sources_1/new/flash.sv
+	modified:   thinpad_top.srcs/sources_1/new/mmu.sv
+	modified:   thinpad_top.srcs/sources_1/new/pipeline/cache.sv
+	modified:   thinpad_top.srcs/sources_1/new/pipeline/execution.sv
+	modified:   thinpad_top.srcs/sources_1/new/pipeline/instr_fetch.sv
+	modified:   thinpad_top.srcs/sources_1/new/pipeline/pipeline_regs.sv
+	modified:   thinpad_top.srcs/sources_1/new/stage_6/cu_pipeline.sv
+	modified:   thinpad_top.srcs/sources_1/new/stage_6/stage_6_top.sv
+	modified:   thinpad_top.srcs/sources_1/new/tlb.sv
+	modified:   thinpad_top.xpr
+
+Important updates!!!
+
+TL;DR: Implement timer interrupt and 
+
+1. Add Clint to support timer interrupt
+2. Extend DAU enabling support of Block RAM, reserved for display memory, 
+   and also a flash memory controller.
+3. Fix pipeline bubbling instruction pointer update, such that after bubbling, 
+   new instruction pointer is that in the next non-bubbling stage.
+4. Add integrated logic analyzer to monitor pipeline status.
+5. Attempt to add page fault support, though not tested.
+6. Fix branch command taken branch instruction pointer calcuations.
+7. Halved size of caches and TLB, using less logical units.
+8. Synchronize memory address during fetching cache blocks, during loading memory contents,
+   and during loading page table, to mitigate the case of attempt to fetch memory for a 
+   mispredicted branch.
+9. Create DAU generator to support generating DAU modules dynamically.
+10. Add supervisor status support for implementing supervisor mode.
+11. Refactored trap handling in CSR.
+12. Remove multiplication block for faster compilation.
+

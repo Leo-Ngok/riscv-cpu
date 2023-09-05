@@ -41,7 +41,7 @@ module lab6_tb;
   // parameter BASE_RAM_INIT_FILE = "D:\\github\\THU_PASS\\Organization\\supervisor-rv\\kernel\\kernel.bin";//\\base_test_new.bin"; //"/tmp/main.bin";//"/tmp/main.bin"; // BaseRAM ??????????????????? "D:\\downloads\\kernel-rv32-int.bin";
   // parameter EXT_RAM_INIT_FILE = "/tmp/eram.bin";  // ExtRAM ?????????????????
   parameter BASE_RAM_INIT_FILE = "D:\\github\\ucore_os_lab\\labcodes_answer\\lab8\\bin\\rbl.img";
-  parameter EXT_RAM_INIT_FILE = "D:\\github\\ucore_os_lab\\labcodes_answer\\lab1\\bin\\ucore.img";
+  parameter EXT_RAM_INIT_FILE = "D:\\github\\ucore_os_lab\\labcodes_answer\\lab3\\bin\\ucore.img";
   initial begin
     // ??????????????????
     dip_sw = 32'h8000_1000;//2;
@@ -250,7 +250,7 @@ module lab6_tb;
       .flash_we_n()
   );
 
-  // 时钟�?
+  // 时钟�?
   clock osc (
       .clk_11M0592(clk_11M0592),
       .clk_50M    (clk_50M)
@@ -310,7 +310,7 @@ module lab6_tb;
       .UB_n(ext_ram_be_n[3])
   );
 
-  // 从文件加�? BaseRAM
+  // 从文件加�? BaseRAM
   initial begin
     reg [31:0] tmp_array[0:1048575];
     integer n_File_ID, n_Init_Size;
@@ -332,7 +332,7 @@ module lab6_tb;
     end
   end
 
-  // 从文件加�? ExtRAM
+  // 从文件加�? ExtRAM
   initial begin
     reg [31:0] tmp_array[0:1048575];
     integer n_File_ID, n_Init_Size;

@@ -53,8 +53,8 @@ module csr(
     reg [31:0] mip;      // 0X344, Machine interrupt pending. (MONITOR)
 
     // SUPERVISOR TRAP SETUP
-    reg [31:0] sstatus;  // 0X100, Supervisor status register.
-    reg [31:0] sie;      // 0X104, Supervisor interrupt-enable register.
+    // reg [31:0] sstatus;  // 0X100, Supervisor status register.
+    // reg [31:0] sie;      // 0X104, Supervisor interrupt-enable register.
     reg [31:0] stvec;    // 0X105, Supervisor trap handler base address.
 
     // SUPERVISOR TRAP HANDLING
@@ -62,7 +62,7 @@ module csr(
     reg [31:0] sepc;     // 0X141, Supervisor exception program counter.
     reg [31:0] scause;   // 0X142, Supervisor trap cause.
     reg [31:0] stval;    // 0X143, Supervisor bad address or instruction.
-    reg [31:0] sip;      // 0X144, Supervisor interrupt pending.
+    // reg [31:0] sip;      // 0X144, Supervisor interrupt pending.
 
     // SUPERVISOR PROTECTION AND TRANSLATION
     reg [31:0] satp;     // 0X180, Supervisor address translation and protection.
@@ -84,32 +84,37 @@ module csr(
 
     wire [11:0] address = instr[31:20]; // Refer to ISA ZICSR
 
+    parameter MSTATUS_MASK = 32'b1000_0000_0111_1111_1111_1111_1110_1010;
+    parameter SSTATUS_MASK = 32'b1000_0000_0000_1101_1110_0111_0110_0010;
+    parameter M_INTR_MASK = 32'b1010_1010_1010;
+    parameter S_INTR_MASK = 32'b0010_0010_0010;
     // READS OUT ORIGINAL CSR VALUES
     always_comb begin
         case(address) 
         12'hf14: rdata_comb = mhartid;
 
-        12'h300: rdata_comb = mstatus;
+        12'h300: rdata_comb = mstatus & MSTATUS_MASK;
         12'h302: rdata_comb = medeleg;
         12'h303: rdata_comb = mideleg;
-        12'h304: rdata_comb = mie;
+        12'h304: rdata_comb = mie & M_INTR_MASK;
         12'h305: rdata_comb = mtvec;
 
         12'h340: rdata_comb = mscratch;
         12'h341: rdata_comb = mepc;
         12'h342: rdata_comb = mcause;
         12'h343: rdata_comb = mtval;
-        12'h344: rdata_comb = mip; 
+        12'h344: rdata_comb = mip & M_INTR_MASK; 
 
-        12'h100: rdata_comb = sstatus;
-        12'h104: rdata_comb = mie; // sie shares the same register as mie.
+        // sstatus shares with mstatus, however, mask it with bits that available for supervisor mode.
+        12'h100: rdata_comb = mstatus & SSTATUS_MASK;
+        12'h104: rdata_comb = mie & S_INTR_MASK; // sie shares the same register as mie.
         12'h105: rdata_comb = stvec;
         
         12'h140: rdata_comb = sscratch;
         12'h141: rdata_comb = sepc;
         12'h142: rdata_comb = scause;
         12'h143: rdata_comb = stval;
-        12'h144: rdata_comb = mip; // sip shares the same register as mip.
+        12'h144: rdata_comb = mip & S_INTR_MASK; // sip shares the same register as mip.
         // no, you should always 'handle' interrupt first.
         12'h180: rdata_comb = satp;
 
@@ -122,120 +127,113 @@ module csr(
 
     assign rdata = rdata_comb;
 
-    reg [31:0] wdata_comb;
     reg [31:0] wdata_internal;
     // SETS NEW CSR VALUES WHERE APPROPRIATE
     always_comb begin
         wdata_internal = (instr[14]) ? {27'b0, instr[19:15]} : wdata; 
-        case(address) 
-        // mstatus: MPP[12:11] only for monitor
-        // for bootloader, 
-        // Bootloader disables FS, clear MPIE also, so make FS[14:13], MPIE[7] writable.
-        // Refer to boot_first_hart in rbl.
-        12'h300: wdata_comb = {
-            mstatus[31:15], wdata_internal[14:11], 
-            mstatus[10:8], wdata_internal[7], 
-            mstatus[6:0]};
-        // medeleg:
-        12'h302: wdata_comb = { 
-            medeleg[31:16], wdata_internal[15],     // Store / AMO page fault
-            medeleg[14],    wdata_internal[13:12], // load, instruction page fault
-            medeleg[11:10], wdata_internal[9:0]}; // secall, uecall, store acc fault, store misalign, load acc fault, load misalign, bp, illegal instr, instr acc fault, instr misalign
-        // mideleg: STIE, SSIE, SEIE
-        12'h303: wdata_comb = {
-            mideleg[31:10], wdata_internal[9], // SEIE
-            mideleg[8:6], wdata_internal[5],   // STIE
-            mideleg[4:2], wdata_internal[1],   // SSIE
-            mideleg[0]};
-        // mie: MTIE only for monitor
-        // Support for MSIE is provided for bootloader (though useless)
-        12'h304: wdata_comb = wdata_internal; /*{
-            mie[31: 8], wdata_internal[7], // MTIE
-            mie[6:4], wdata_internal[3],   // MSIE
-            mie[2:0]};*/
-        // mtvec
-        12'h305: wdata_comb = wdata_internal;
+        // case(address) 
+        // // mstatus: MPP[12:11] only for monitor
+        // // for bootloader, 
+        // // Bootloader disables FS, clear MPIE also, so make FS[14:13], MPIE[7] writable.
+        // // Refer to boot_first_hart in rbl.
+        // 12'h300: wdata_comb = {
+        //     mstatus[31:15], wdata_internal[14:11], 
+        //     mstatus[10:8], wdata_internal[7], 
+        //     mstatus[6:0]};
+        // // medeleg:
+        // 12'h302: wdata_comb = { 
+        //     medeleg[31:16], wdata_internal[15],     // Store / AMO page fault
+        //     medeleg[14],    wdata_internal[13:12], // load, instruction page fault
+        //     medeleg[11:10], wdata_internal[9:0]}; // secall, uecall, store acc fault, store misalign, load acc fault, load misalign, bp, illegal instr, instr acc fault, instr misalign
+        // // mideleg: STIE, SSIE, SEIE
+        // 12'h303: wdata_comb = {
+        //     mideleg[31:10], wdata_internal[9], // SEIE
+        //     mideleg[8:6], wdata_internal[5],   // STIE
+        //     mideleg[4:2], wdata_internal[1],   // SSIE
+        //     mideleg[0]};
+        // // mie: MTIE only for monitor
+        // // Support for MSIE is provided for bootloader (though useless)
+        // 12'h304: wdata_comb = wdata_internal; /*{
+        //     mie[31: 8], wdata_internal[7], // MTIE
+        //     mie[6:4], wdata_internal[3],   // MSIE
+        //     mie[2:0]};*/
+        // // mtvec
+        // 12'h305: wdata_comb = wdata_internal;
 
-        // mscratch
-        12'h340: wdata_comb = wdata_internal;
-        // mepc
-        12'h341: wdata_comb = wdata_internal;
-        // mcause
-        12'h342: wdata_comb = wdata_internal;
-        // mtval
-        12'h343: wdata_comb = wdata_internal;
-        // mip: MTIP only for monitor
-        // add support for MSIP, since MSIE is set by bootloader.
-        12'h344: wdata_comb = wdata_internal; /*{
-            mip[31: 4],// wdata_internal[7], 
-            //mip[6:4], 
-            wdata_internal[3], 
-            mip[2:0]};*/
+        // // mscratch
+        // 12'h340: wdata_comb = wdata_internal;
+        // // mepc
+        // 12'h341: wdata_comb = wdata_internal;
+        // // mcause
+        // 12'h342: wdata_comb = wdata_internal;
+        // // mtval
+        // 12'h343: wdata_comb = wdata_internal;
+        // // mip: MTIP only for monitor
+        // // add support for MSIP, since MSIE is set by bootloader.
+        // 12'h344: wdata_comb = wdata_internal; /*{
+        //     mip[31: 4],// wdata_internal[7], 
+        //     //mip[6:4], 
+        //     wdata_internal[3], 
+        //     mip[2:0]};*/
         
-        // sstatus
-        // Disassemble uCore and you'll realize that
-        // only sie(1), spp(8) and sum(18) are needed
-        12'h100: wdata_comb = {
-            mstatus[31:19], wdata_internal[18], 
-            mstatus[17: 9], wdata_internal[ 8],
-            mstatus[ 7: 2], wdata_internal[ 1],
-            mstatus[0]
-        };
-        // sie
-        // only ssie(1) and stie(5) are needed.
-        12'h104: wdata_comb = wdata_internal; /*{
-            mie[31:6], wdata_internal[5],
-            mie[4:2], wdata_internal[1],
-            mie[0]
-        };*/
-        // stvec
-        12'h105: wdata_comb = wdata_internal;
+        // // sstatus
+        // // Disassemble uCore and you'll realize that
+        // // only sie(1), spp(8) and sum(18) are needed
+        // 12'h100: wdata_comb = {
+        //     mstatus[31:19], wdata_internal[18], 
+        //     mstatus[17: 9], wdata_internal[ 8],
+        //     mstatus[ 7: 2], wdata_internal[ 1],
+        //     mstatus[0]
+        // };
+        // // sie
+        // // only ssie(1) and stie(5) are needed.
+        // 12'h104: wdata_comb = wdata_internal; /*{
+        //     mie[31:6], wdata_internal[5],
+        //     mie[4:2], wdata_internal[1],
+        //     mie[0]
+        // };*/
+        // // stvec
+        // 12'h105: wdata_comb = wdata_internal;
 
-        // sscratch
-        12'h140: wdata_comb = wdata_internal;
-        // sepc
-        12'h141: wdata_comb = wdata_internal;
-        // scause
-        12'h142: wdata_comb = wdata_internal;
-        // stval
-        12'h143: wdata_comb = wdata_internal;
-        // sip
-        12'h144: wdata_comb = wdata_internal; /*{
-            mip[31:6], wdata_internal[5],
-            mip[4:2], wdata_internal[1],
-            mip[0]
-        };*/
+        // // sscratch
+        // 12'h140: wdata_comb = wdata_internal;
+        // // sepc
+        // 12'h141: wdata_comb = wdata_internal;
+        // // scause
+        // 12'h142: wdata_comb = wdata_internal;
+        // // stval
+        // 12'h143: wdata_comb = wdata_internal;
+        // // sip
+        // 12'h144: wdata_comb = wdata_internal; /*{
+        //     mip[31:6], wdata_internal[5],
+        //     mip[4:2], wdata_internal[1],
+        //     mip[0]
+        // };*/
 
-        // satp
-        12'h180: wdata_comb = wdata_internal;
-        default: wdata_comb = 32'b0;
-        endcase
+        // // satp
+        // 12'h180: wdata_comb = wdata_internal;
+        // default: wdata_comb = 32'b0;
+        // endcase
     end
 
 
     reg [31:0] mstatus_comb;
-    reg [31:0] mcause_comb;
 
-    reg [31:0] sstatus_comb;
     reg [31:0] cause_comb;
-    reg [31:0] intr_pending_comb;
     priv_mode_t next_priv;
 
     reg       take_ip_comb;
     reg [31:0] new_ip_comb;
 
     always_comb begin
-        mcause_comb = 32'b0;
         mstatus_comb = mstatus;
         
-        sstatus_comb = 32'b0;
         cause_comb = 32'hffffffff;
 
         next_priv = privilege;
         take_ip_comb = 0;
         new_ip_comb = 32'h8000_0000;
         
-        intr_pending_comb = mip;
         casez(instr)
         MRET: begin
             take_ip_comb = 1;
@@ -250,11 +248,11 @@ module csr(
         SRET: begin
             take_ip_comb = 1;
             new_ip_comb = sepc;
-            sstatus_comb = {
-                sstatus[31:9], 1'b0,
-                sstatus[7:6], 1'b1,
-                sstatus[4:2], sstatus[5],
-                sstatus[0]
+            mstatus_comb = {
+                mstatus[31:9], 1'b0,
+                mstatus[7:6], 1'b1,
+                mstatus[4:2], mstatus[5],
+                mstatus[0]
             };
         end
         default: begin
@@ -321,7 +319,7 @@ module csr(
                 next_priv = MACHINE;
             end
             if(!take_ip_comb && 
-             ((privilege == SUPERVISOR && sstatus[1]) || privilege == USER) &&
+             ((privilege == SUPERVISOR && mstatus[1]) || privilege == USER) &&
                     (mie[5] && mip[5]) 
             ) begin
                 take_ip_comb = 1;
@@ -334,11 +332,11 @@ module csr(
                 (cause_comb[31] && next_priv == SUPERVISOR)) begin
                     next_priv = SUPERVISOR;
                     new_ip_comb = { stvec[31:2], 2'b0 };
-                    sstatus_comb = {
-                        sstatus[31:9], privilege[0],
-                        sstatus[7:6], sstatus[1],
-                        sstatus[4:2], 1'b0,
-                        sstatus[0]
+                    mstatus_comb = {
+                        mstatus[31:9], privilege[0],
+                        mstatus[7:6], mstatus[1],
+                        mstatus[4:2], 1'b0,
+                        mstatus[0]
                     };
                 end else begin
                     next_priv = MACHINE;
@@ -375,15 +373,15 @@ module csr(
             mtval   <= 32'b0;
             mip     <= 32'b0;
             
-            sstatus <= 32'b0;
-            sie     <= 32'b0;
+            // sstatus <= 32'b0;
+            // sie     <= 32'b0;
             stvec   <= 32'b0;
             
             sscratch<= 32'b0;
             sepc    <= 32'b0;
             scause  <= 32'b0;
             stval   <= 32'b0;
-            sip     <= 32'b0;
+            // sip     <= 32'b0;
 
             satp    <= 32'b0;
 
@@ -392,86 +390,86 @@ module csr(
             casez(instr)
             CSRRW, CSRRWI: begin
                 case(address) 
-                // 12'hf14: mhartid <= wdata_comb; No, That is a readonly field.
-                12'h300: mstatus    <= wdata_comb;
-                12'h302: medeleg    <= wdata_comb;
-                12'h303: mideleg    <= wdata_comb;
-                12'h304: mie        <= wdata_comb;
-                12'h305: mtvec      <= wdata_comb;
+                // 12'hf14: mhartid <= wdata_internal; No, That is a readonly field.
+                12'h300: mstatus    <= (mstatus & ~MSTATUS_MASK) | (wdata_internal & MSTATUS_MASK);
+                12'h302: medeleg    <= wdata_internal;
+                12'h303: mideleg    <= wdata_internal;
+                12'h304: mie        <= (mie & ~M_INTR_MASK) | (wdata_internal & M_INTR_MASK);
+                12'h305: mtvec      <= wdata_internal;
 
-                12'h340: mscratch   <= wdata_comb;
-                12'h341: mepc       <= wdata_comb;
-                12'h342: mcause     <= wdata_comb;
-                12'h343: mtval      <= wdata_comb;
-                12'h344: mip        <= wdata_comb;
+                12'h340: mscratch   <= wdata_internal;
+                12'h341: mepc       <= wdata_internal;
+                12'h342: mcause     <= wdata_internal;
+                12'h343: mtval      <= wdata_internal;
+                12'h344: mip        <= (mip & ~M_INTR_MASK) | (wdata_internal & M_INTR_MASK);
 
-                12'h100: sstatus    <= wdata_comb;
-                12'h104: mie        <= wdata_comb; // shares with sie.
-                12'h105: stvec      <= wdata_comb;
+                12'h100: mstatus    <= (mstatus & ~SSTATUS_MASK) | (wdata_internal & SSTATUS_MASK);
+                12'h104: mie        <= (mie & ~S_INTR_MASK) | (wdata_internal & S_INTR_MASK); // shares with sie.
+                12'h105: stvec      <= wdata_internal;
 
-                12'h140: sscratch   <= wdata_comb;
-                12'h141: sepc       <= wdata_comb;
-                12'h142: scause     <= wdata_comb;
-                12'h143: stval      <= wdata_comb;
-                12'h144: mip        <= wdata_comb;
+                12'h140: sscratch   <= wdata_internal;
+                12'h141: sepc       <= wdata_internal;
+                12'h142: scause     <= wdata_internal;
+                12'h143: stval      <= wdata_internal;
+                12'h144: mip        <= (mip & ~S_INTR_MASK) | (wdata_internal & S_INTR_MASK);
 
-                12'h180: satp       <= wdata_comb;
+                12'h180: satp       <= wdata_internal;
                 endcase
             end
             CSRRS, CSRRSI: begin
                 case(address) 
-                // 12'hf14: mhartid <= mhartid |wdata_comb; No, That is a readonly field.
-                12'h300: mstatus    <= mstatus | wdata_comb;
-                12'h302: medeleg    <= mstatus | wdata_comb;
-                12'h303: mideleg    <= mstatus | wdata_comb;
-                12'h304: mie        <= mie     | wdata_comb;
-                12'h305: mtvec      <= mtvec   | wdata_comb;
+                // 12'hf14: mhartid <= mhartid |wdata_internal; No, That is a readonly field.
+                12'h300: mstatus    <= mstatus | (wdata_internal & MSTATUS_MASK);
+                12'h302: medeleg    <= medeleg | wdata_internal;
+                12'h303: mideleg    <= mideleg | wdata_internal;
+                12'h304: mie        <= mie     | (wdata_internal & M_INTR_MASK);
+                12'h305: mtvec      <= mtvec   | wdata_internal;
 
-                12'h340: mscratch   <= mscratch| wdata_comb;
-                12'h341: mepc       <= mepc    | wdata_comb;
-                12'h342: mcause     <= mcause  | wdata_comb;
-                12'h343: mtval      <= mtval   | wdata_comb;
-                12'h344: mip        <= mip     | wdata_comb;
+                12'h340: mscratch   <= mscratch| wdata_internal;
+                12'h341: mepc       <= mepc    | wdata_internal;
+                12'h342: mcause     <= mcause  | wdata_internal;
+                12'h343: mtval      <= mtval   | wdata_internal;
+                12'h344: mip        <= mip     | (wdata_internal & M_INTR_MASK);
 
-                12'h100: sstatus    <= sstatus | wdata_comb;
-                12'h104: mie        <= mie     | wdata_comb;
-                12'h105: stvec      <= stvec   | wdata_comb;
+                12'h100: mstatus    <= mstatus | (wdata_internal & SSTATUS_MASK);
+                12'h104: mie        <= mie     | (wdata_internal & S_INTR_MASK);
+                12'h105: stvec      <= stvec   | wdata_internal;
 
-                12'h140: sscratch   <= sscratch| wdata_comb;
-                12'h141: sepc       <= sepc    | wdata_comb;
-                12'h142: scause     <= scause  | wdata_comb;
-                12'h143: stval      <= stval   | wdata_comb;
-                12'h144: mip        <= mip     | wdata_comb;
+                12'h140: sscratch   <= sscratch| wdata_internal;
+                12'h141: sepc       <= sepc    | wdata_internal;
+                12'h142: scause     <= scause  | wdata_internal;
+                12'h143: stval      <= stval   | wdata_internal;
+                12'h144: mip        <= mip     | (wdata_internal & S_INTR_MASK);
 
-                12'h180: satp       <= satp    | wdata_comb;
+                12'h180: satp       <= satp    | wdata_internal;
                 endcase
             end
             CSRRC, CSRRCI: begin
                 case(address) 
-                // 12'hf14: mhartid <= mhartid & ~wdata_comb; No, That is a readonly field.
-                12'h300: mstatus    <= mstatus & ~wdata_comb;
-                12'h302: medeleg    <= mstatus & ~wdata_comb;
-                12'h303: mideleg    <= mstatus & ~wdata_comb;
-                12'h304: mie        <= mie     & ~wdata_comb;
-                12'h305: mtvec      <= mtvec   & ~wdata_comb;
+                // 12'hf14: mhartid <= mhartid & ~wdata_internal; No, That is a readonly field.
+                12'h300: mstatus    <= mstatus & ~(wdata_internal & MSTATUS_MASK);
+                12'h302: medeleg    <= medeleg & ~wdata_internal;
+                12'h303: mideleg    <= mideleg & ~wdata_internal;
+                12'h304: mie        <= mie     & ~(wdata_internal & M_INTR_MASK);
+                12'h305: mtvec      <= mtvec   & ~wdata_internal;
 
-                12'h340: mscratch   <= mscratch& ~wdata_comb;
-                12'h341: mepc       <= mepc    & ~wdata_comb;
-                12'h342: mcause     <= mcause  & ~wdata_comb;
-                12'h343: mtval      <= mtval   & ~wdata_comb;
-                12'h344: mip        <= mip     & ~wdata_comb;
+                12'h340: mscratch   <= mscratch& ~wdata_internal;
+                12'h341: mepc       <= mepc    & ~wdata_internal;
+                12'h342: mcause     <= mcause  & ~wdata_internal;
+                12'h343: mtval      <= mtval   & ~wdata_internal;
+                12'h344: mip        <= mip     & ~(wdata_internal & M_INTR_MASK);
 
-                12'h100: sstatus    <= sstatus & ~wdata_comb;
-                12'h104: mie        <= mie     & ~wdata_comb;
-                12'h105: stvec      <= stvec   & ~wdata_comb;
+                12'h100: mstatus    <= mstatus & ~(wdata_internal & SSTATUS_MASK);
+                12'h104: mie        <= mie     & ~(wdata_internal & S_INTR_MASK);
+                12'h105: stvec      <= stvec   & ~wdata_internal;
 
-                12'h140: sscratch   <= sscratch& ~wdata_comb;
-                12'h141: sepc       <= sepc    & ~wdata_comb;
-                12'h142: scause     <= scause  & ~wdata_comb;
-                12'h143: stval      <= stval   & ~wdata_comb;
-                12'h144: mip        <= mip     & ~wdata_comb;
+                12'h140: sscratch   <= sscratch& ~wdata_internal;
+                12'h141: sepc       <= sepc    & ~wdata_internal;
+                12'h142: scause     <= scause  & ~wdata_internal;
+                12'h143: stval      <= stval   & ~wdata_internal;
+                12'h144: mip        <= mip     & ~(wdata_internal & S_INTR_MASK);
 
-                12'h180: satp       <= satp    & ~wdata_comb;
+                12'h180: satp       <= satp    & ~wdata_internal;
                 endcase
             end
             MRET: begin
@@ -489,9 +487,12 @@ module csr(
                         mepc    <= curr_ip;
                         mstatus <= mstatus_comb;
                         mcause  <= cause_comb;
+                        if(data_page_fault) begin
+                            mtval <= data_fault_addr;
+                        end
                     end else begin
                         sepc    <= curr_ip;
-                        sstatus <= sstatus_comb;
+                        mstatus <= mstatus_comb;
                         scause  <= cause_comb;
                         if(data_page_fault) begin
                             stval <= data_fault_addr;
