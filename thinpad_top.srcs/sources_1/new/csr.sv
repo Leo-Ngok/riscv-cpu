@@ -15,10 +15,18 @@ module csr(
     input wire instr_page_fault,
     input wire data_page_fault,
 
+    input wire instr_addr_misaligned,
+    input wire data_addr_misaligned,
+
+    input wire no_read_access,
+    input wire no_write_access,
+    input wire no_exec_access,
+
     input wire [31:0] instr_fault_addr,
     input wire [31:0] data_fault_addr,
 
-    input wire [63:0] mtime
+    input wire [63:0] mtime,
+    output reg pause_global // XXX
 );
     typedef enum logic [1:0] { 
         USER, SUPERVISOR, HYPERVISOR, MACHINE 
@@ -224,7 +232,7 @@ module csr(
 
     reg       take_ip_comb;
     reg [31:0] new_ip_comb;
-
+    reg pause_global_comb; // XXX
     always_comb begin
         mstatus_comb = mstatus;
         
@@ -233,7 +241,7 @@ module csr(
         next_priv = privilege;
         take_ip_comb = 0;
         new_ip_comb = 32'h8000_0000;
-        
+        pause_global_comb = 0;
         casez(instr)
         MRET: begin
             take_ip_comb = 1;
@@ -257,21 +265,28 @@ module csr(
         end
         default: begin
                     
-            // ( ) 0 - instr address misaligned
-            // ( ) 1 - instr access fault
+            // (?) 0 - instr address misaligned
+            // (?) 1 - instr access fault
             // ( ) 2 - illegal instr
             // (v) 3 - breakpoint
-            // ( ) 4 - load addr misaligned
-            // ( ) 5 - load access fault
-            // ( ) 6 - store addrss misalgned
-            // ( ) 7 - store access fault
-            // ( ) 8 - ecall from U
-            // ( ) 9 - ecall from S
-            // ( ) 11 - ecall from M
-            // ( ) 12 - Instr page fault
-            // ( ) 13 - Load page fault
-            // ( ) 15 - store page fault
-
+            // (?) 4 - load addr misaligned
+            // (?) 5 - load access fault
+            // (?) 6 - store addrss misaligned
+            // (?) 7 - store access fault
+            // (v) 8 - ecall from U
+            // (v) 9 - ecall from S
+            // (?) 11 - ecall from M
+            // (?) 12 - Instr page fault
+            // (v) 13 - Load page fault
+            // (v) 15 - store page fault
+            // ==============================================================
+            // first we deal with instruction misalignment.
+            if(!take_ip_comb && instr_addr_misaligned) begin
+                take_ip_comb = 1;
+                cause_comb = 32'd0; // instruction address misaligned.
+                pause_global_comb = 1;
+            end
+            // ==============================================================
             // handle ecall, then handle page fault.
             if(!take_ip_comb && instr == ECALL) begin
                 case(privilege)
@@ -295,8 +310,23 @@ module csr(
                 cause_comb = 32'd3;
                 take_ip_comb = 1;
             end
+
+            // ==============================================================
+            // address misaligned.
+            if(!take_ip_comb && data_addr_misaligned) begin
+                take_ip_comb = 1;
+                if(instr[6:0] == 7'b0000011) begin
+                    cause_comb = 32'd4; // load address misaligned.
+                end else if(instr[6:0] == 7'b0100011) begin
+                    cause_comb = 32'd6; // Store address misaligned.
+                end else begin // Illegal instruction.
+                    cause_comb = 32'd2;
+                end
+                pause_global_comb = 1;
+            end
+            // ==============================================================
             // page fault
-            if(!take_ip_comb && data_page_fault) begin
+            if(!take_ip_comb && satp[31] && data_page_fault) begin
                 take_ip_comb = 1;
                 if(instr[6:0] == 7'b0000011) begin
                     cause_comb = 32'd13; // load page fault.
@@ -305,8 +335,30 @@ module csr(
                 end else begin // Illegal instruction.
                     cause_comb = 32'd2;
                 end
-
             end
+            // instruction page fault.
+            if(!take_ip_comb && satp[31] && instr_page_fault) begin
+                take_ip_comb = 1;
+                cause_comb = 32'd12; // instruction page fault.
+            end
+            // ==============================================================
+            // access violations.
+            /*if(!take_ip_comb && satp[31] && no_exec_access) begin
+                take_ip_comb = 1;
+                cause_comb = 32'd1; // instruction access fault.
+                pause_global_comb = 1;
+            end
+            if(!take_ip_comb && satp[31] && no_read_access && instr[6:0] == 7'b0000011) begin
+                take_ip_comb = 1;
+                cause_comb = 32'd5; // load access fault.
+                pause_global_comb = 1;
+            end*/
+            if(!take_ip_comb && satp[31] && no_write_access && instr[6:0] == 7'b0100011) begin
+                take_ip_comb = 1;
+                cause_comb = 32'd7; // store access fault.
+                pause_global_comb = 1;
+            end
+            // ==============================================================
             // timer interrupt, refer to p.32, p.67 of volume 2
             if(
                 !take_ip_comb && 
@@ -315,7 +367,7 @@ module csr(
                 (mideleg[7] == 1'b0)
             ) begin
                 take_ip_comb = 1;
-                cause_comb = 32'h8000_0007;
+                cause_comb = 32'h8000_0007; // machine timer interrupt.
                 next_priv = MACHINE;
             end
             if(!take_ip_comb && 
@@ -323,13 +375,18 @@ module csr(
                     (mie[5] && mip[5]) 
             ) begin
                 take_ip_comb = 1;
-                cause_comb = 32'h8000_0005;
+                cause_comb = 32'h8000_0005; // supervisor timer interrupt.
                 next_priv = SUPERVISOR;
             end
+            // ==============================================================
 
             if(take_ip_comb) begin
-                if((privilege != MACHINE && medeleg[cause_comb[5:0]])||
-                (cause_comb[31] && next_priv == SUPERVISOR)) begin
+                if(
+                    // exceptions.
+                    (!cause_comb[31] && privilege != MACHINE && medeleg[cause_comb[5:0]]) ||
+                    // interrupts.
+                    (cause_comb[31] && next_priv == SUPERVISOR)
+                ) begin
                     next_priv = SUPERVISOR;
                     new_ip_comb = { stvec[31:2], 2'b0 };
                     mstatus_comb = {
@@ -384,7 +441,7 @@ module csr(
             // sip     <= 32'b0;
 
             satp    <= 32'b0;
-
+            pause_global <= 0; // XXX
         end else begin
             mip[7] <= timer_interrupt;
             casez(instr)
@@ -487,8 +544,10 @@ module csr(
                         mepc    <= curr_ip;
                         mstatus <= mstatus_comb;
                         mcause  <= cause_comb;
-                        if(data_page_fault) begin
-                            mtval <= data_fault_addr;
+                        if(data_page_fault || data_addr_misaligned || no_read_access||no_write_access) begin
+                            mtval <= data_fault_addr; // TODO: CHANGE IT BACK ! TO! data_fault_addr;
+                        end else if(instr_page_fault || instr_addr_misaligned || no_exec_access) begin
+                            mtval <= instr_fault_addr;
                         end
                     end else begin
                         sepc    <= curr_ip;
@@ -496,8 +555,12 @@ module csr(
                         scause  <= cause_comb;
                         if(data_page_fault) begin
                             stval <= data_fault_addr;
+                        end else if(instr_page_fault || instr_addr_misaligned || no_exec_access) begin
+                            stval <= instr_fault_addr;
                         end
                     end
+                    if(pause_global_comb)
+                        pause_global <= pause_global_comb;
                 end
             end
             endcase
@@ -558,7 +621,7 @@ module csr(
     // wire mprv = mstatus[17];
 
     // // permit Supervisor User Memory access 
-    // wire sum = mstatus[18];
+    wire sum = mstatus[18];
 
     // // make executable readable.    
     // // read page marked executable only.

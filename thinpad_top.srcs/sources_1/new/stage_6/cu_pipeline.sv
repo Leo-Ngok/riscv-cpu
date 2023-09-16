@@ -43,7 +43,11 @@ module cu_pipeline (
     // Control signals
     input  wire        step,
     input  wire [31:0] dip_sw,
-    output wire [15:0] curr_ip_out,
+    input wire [3:0] touch_btn,
+    //output wire [31:0] curr_ip_out,
+    output wire [7:0] dpy0,
+    output wire [7:0] dpy1,
+    output wire [15:0] leds,
 
     input wire         local_intr,
     input wire [63:0]  mtime
@@ -59,6 +63,11 @@ module cu_pipeline (
     wire [31:0] next_ip;
     wire        if_mmu_ack;
     wire [31:0] if_mmu_data_arrival;
+    
+    wire if_page_fault;
+    wire if_addr_misaligned;
+    wire if_no_exec_access;
+    wire if_mmu_error;
     // ID
     // From IF stage
     wire [31:0] id_instr;
@@ -145,15 +154,36 @@ module cu_pipeline (
     wire        mem_invalidate_icache;
 
     wire        mem_data_page_fault;
+    wire        mem_write_violation;
+    wire        mem_read_violation;
+    wire        mem_addr_misaligned;
     // WB
     wire        wb_we;
     wire [ 4:0] wb_addr;
     wire [31:0] wb_data;
+    wire [31:0] wb_ip;
     // Bubble case
     wire [31:0] if_id_flush_ip;
     wire [31:0] id_alu_flush_ip;
     wire [31:0] alu_mem_flush_ip;
     wire [31:0] mem_wb_flush_ip;
+
+    
+    wire if_id_page_fault;
+    wire if_id_addr_misaligned;
+    wire if_id_no_exec_access;
+
+    wire id_instr_page_fault;
+    wire id_instr_addr_misaligned;
+    wire id_instr_no_exec_access;
+
+    wire ex_instr_page_fault;
+    wire ex_instr_addr_misaligned;
+    wire ex_instr_no_exec_access;
+
+    wire mem_instr_page_fault;
+    wire mem_instr_addr_misaligned;
+    wire mem_instr_no_exec_access;
     // IF
     next_instr_ptr ip_predict(
         .mem_ack(),
@@ -272,6 +302,7 @@ module cu_pipeline (
         .dau_cache_clear_complete(dau_cache_clear_complete),
         .pause_o(mem_pause)
     );
+    wire csr_pause; // XXX
     csr csr_inst(
         .clock(clk),
         .reset(rst),
@@ -287,14 +318,24 @@ module cu_pipeline (
         .take_ip(mem_csr_take_ip),
         .new_ip(mem_csr_new_ip),
 
-        .instr_page_fault(1'b0),
+        .instr_page_fault(mem_instr_page_fault),
         .data_page_fault(mem_data_page_fault),
 
-        .instr_fault_addr(32'b0),
-        .data_fault_addr(mem_addr)
+        .instr_addr_misaligned(mem_instr_addr_misaligned),
+        .data_addr_misaligned(mem_addr_misaligned),
+
+        .no_read_access(mem_read_violation),
+        .no_write_access(mem_write_violation),
+        .no_exec_access(mem_instr_no_exec_access),
+
+        .instr_fault_addr(mem_ip),
+        .data_fault_addr(mem_addr),
+
+        .pause_global(csr_pause) // XXX
     );
 
     assign satp = { csr_inst.mmu_enable, csr_inst.satp[30:0] };
+    wire [31:0] pte_debug;
     mmu data_mm(
         .clock(clk),
         .reset(rst),
@@ -319,8 +360,18 @@ module cu_pipeline (
 
         .bypass(dau_bypass_o),
         .invalidate_tlb(mem_invalidate_tlb),
+        .if_enable(1'b0),
+        .priv(csr_inst.privilege),
+        .sum(csr_inst.sum),
 
-        .page_fault(mem_data_page_fault)
+        .page_fault(mem_data_page_fault),
+        .no_read_access(mem_read_violation),
+        .no_write_access(mem_write_violation),
+        .no_exec_access(), // never happens.
+        .addr_misaligned(mem_addr_misaligned),
+        .mmu_error(), // no need.
+
+        .pte_debug(pte_debug)
     );
     mmu instr_mm(
         .clock(clk),
@@ -346,8 +397,18 @@ module cu_pipeline (
 
         .bypass(dau_instr_bypass_o),
         .invalidate_tlb(mem_invalidate_tlb),
+        .if_enable(1'b1),
+        .priv(csr_inst.privilege),
+        .sum(csr_inst.sum),
 
-        .page_fault()
+        .page_fault(if_page_fault),
+        .no_read_access(), // never
+        .no_write_access(), // never
+        .no_exec_access(if_no_exec_access), // TODO
+        .addr_misaligned(if_addr_misaligned),
+        .mmu_error(if_mmu_error),
+        
+        .pte_debug()
     );
     // WB
     assign rf_we    = wb_we;
@@ -365,10 +426,16 @@ module cu_pipeline (
     wire ex_mem_bubble;
     wire mem_wb_bubble;
 
+    wire debug_pause;
+
     cu_orchestra cu_control(
         .if_ip(pre_if_ip),
         .if_instr(if_mmu_data_arrival),
         .if_ack  (if_mmu_ack),
+        .if_page_fault(if_page_fault),
+        .if_addr_misaligned(if_addr_misaligned),
+        .if_no_exec_access(if_no_exec_access),
+        .if_mmu_error(if_mmu_error),
 
         .id_ip(id_ip),
         .id_instr(id_instr),
@@ -390,11 +457,16 @@ module cu_pipeline (
         .csr_take_ip(mem_csr_take_ip),
         .csr_new_ip(mem_csr_new_ip),
 
+        .pause_global(debug_pause),
+
         .pre_if_stall(pre_if_stall),
 
         .if_id_stall (if_id_stall ),
         .if_id_bubble(if_id_bubble),
         .if_id_ip(if_id_flush_ip),
+        .if_id_page_fault(if_id_page_fault),
+        .if_id_addr_misaligned(if_id_addr_misaligned),
+        .if_id_no_exec_access(if_id_no_exec_access),
 
         .id_alu_stall (id_ex_stall ),
         .id_alu_bubble(id_ex_bubble),
@@ -437,7 +509,17 @@ module cu_pipeline (
         .if_instr(if_mmu_data_arrival),
         .id_instr(id_instr),
 
-        .bubble_ip(if_id_flush_ip)
+        .bubble_ip(if_id_flush_ip),
+        
+        .if_page_fault(if_id_page_fault),
+        .id_instr_page_fault(id_instr_page_fault),
+        
+        .if_addr_misaligned(if_id_addr_misaligned),
+        .id_instr_addr_misaligned(id_instr_addr_misaligned),
+
+        .if_no_exec_access(if_id_no_exec_access),
+        .id_instr_no_exec_access(id_instr_no_exec_access)
+
     );
 
     id_ex ppl_id_ex(
@@ -479,6 +561,15 @@ module cu_pipeline (
 
         .id_csrdata(id_mux_alu_op1),
         .ex_csrdata(alu_csrdata),
+
+        .id_instr_page_fault(id_instr_page_fault),
+        .ex_instr_page_fault(ex_instr_page_fault),
+
+        .id_instr_addr_misaligned(id_instr_addr_misaligned),
+        .ex_instr_addr_misaligned(ex_instr_addr_misaligned),
+
+        .id_instr_no_exec_access(id_instr_no_exec_access),
+        .ex_instr_no_exec_access(ex_instr_no_exec_access),
 
         .id_clear_tlb(decoder_clear_tlb),
         .ex_clear_tlb(alu_clear_tlb),
@@ -533,6 +624,15 @@ module cu_pipeline (
         .ex_csrdt (alu_op1),
         .mem_csrdt(mem_csrdt),
 
+        .ex_instr_page_fault(ex_instr_page_fault),
+        .mem_instr_page_fault(mem_instr_page_fault),
+
+        .ex_instr_addr_misaligned(ex_instr_addr_misaligned),
+        .mem_instr_addr_misaligned(mem_instr_addr_misaligned),
+
+        .ex_instr_no_exec_access(ex_instr_no_exec_access),
+        .mem_instr_no_exec_access(mem_instr_no_exec_access),
+
         .ex_clear_tlb(alu_clear_tlb),
         .mem_clear_tlb(mem_clear_tlb),
 
@@ -551,7 +651,7 @@ module cu_pipeline (
 
         .bubble_ip(alu_mem_flush_ip)
     );
-
+    wire [31:0] wb_instr;
     mem_wb ppl_mem_wb(
         .clock(clk),
         .reset(rst),
@@ -570,7 +670,10 @@ module cu_pipeline (
         .wb_wdata (wb_data),
 
         .mem_instr(mem_instr),
-        .wb_instr()
+        .wb_instr(wb_instr),
+
+        .mem_ip(mem_ip),
+        .wb_ip(wb_ip)
     );
 
     ila analyzer(
@@ -582,12 +685,85 @@ module cu_pipeline (
         .probe4(dau_data_o),
         .probe5(dau_instr_addr_o)
     );
+
+    //assign curr_ip_out = wb_ip;
+
+    debug dbg(
+        .mstatus(csr_inst.mstatus),
+        .medeleg(csr_inst.medeleg),
+        .mideleg(csr_inst.mideleg),
+        .mie(csr_inst.mie),
+        .mtvec(csr_inst.mtvec),
+        .mscratch(csr_inst.mscratch),
+        .mepc(csr_inst.mepc),
+        .mcause(csr_inst.mcause),
+        .mtval(csr_inst.mtval),
+        .mip(csr_inst.mip),
+        .stvec(csr_inst.stvec),
+        .sscratch(csr_inst.sscratch),
+        .sepc(csr_inst.sepc),
+        .scause(csr_inst.scause),
+        .stval(csr_inst.stval),
+        .satp(csr_inst.satp),
+
+        .if_ip(pre_if_ip),
+        .if_instr(if_mmu_data_arrival),
+
+        .id_ip(id_ip),
+        .id_instr(id_instr),
+
+        .ex_ip(alu_ip),
+        .ex_instr(alu_instr),
+
+        .mem_ip(mem_ip),
+        .mem_instr(mem_instr),
+
+        .wb_ip(wb_ip),
+        .wb_instr(wb_instr),
+
+        .id_iaf(id_instr_no_exec_access),
+        .id_iam(id_instr_addr_misaligned),
+        .id_ipf(id_instr_page_fault),
+
+        .ex_iaf(ex_instr_no_exec_access),
+        .ex_iam(ex_instr_addr_misaligned),
+        .ex_ipf(ex_instr_page_fault),
+
+        .mem_iaf(mem_instr_no_exec_access),
+        .mem_iam(mem_instr_addr_misaligned),
+        .mem_ipf(mem_instr_page_fault),
+
+        .csr_exception(csr_pause),
+        
+        .mem_addr(mem_addr),
+        .mem_pte(pte_debug), // TODO
+
+        .dip_sw(dip_sw),
+        .touch_btn(touch_btn),
+        .leds(leds),
+        .clock(clk),
+        .reset(rst),
+        .step(step),
+        .global_pause(debug_pause)
+    );
+    SEG7_LUT seg_lo (
+      .oSEG1(dpy0),
+      .iDIG ({2'b0, csr_inst.privilege})
+  );
+  SEG7_LUT seg_hi (
+      .oSEG1(dpy1),
+      .iDIG (csr_inst.cause_comb[3:0])
+  );
 endmodule
 
 module cu_orchestra(
     input wire [31:0] if_ip,
     input wire [31:0] if_instr,
     input wire        if_ack,
+    input wire        if_page_fault,
+    input wire        if_addr_misaligned,
+    input wire        if_no_exec_access,
+    input wire        if_mmu_error,
 
     input wire [31:0] id_ip,
     input wire [31:0] id_instr,
@@ -609,11 +785,15 @@ module cu_orchestra(
     input wire        csr_take_ip,
     input wire [31:0] csr_new_ip,
 
+    input wire        pause_global, // XXX
     output reg pre_if_stall,
 
     output reg if_id_stall,
     output reg if_id_bubble,
     output reg [31:0] if_id_ip,
+    output reg if_id_page_fault,
+    output reg if_id_addr_misaligned,
+    output reg if_id_no_exec_access,
 
     output reg id_alu_stall,
     output reg id_alu_bubble,
@@ -666,6 +846,10 @@ module cu_orchestra(
         mem_wait_req = 0;
         wb_wait_req = 0;
 
+        if_id_page_fault = 0;
+        if_id_no_exec_access = 0;
+        if_id_addr_misaligned = 0;
+
         // Case 1.
         if_wait_req = ~if_ack;
         mem_wait_req = ~mem_ack;
@@ -686,14 +870,18 @@ module cu_orchestra(
         mem_take_ip = mem_flush_take_ip || csr_take_ip;
 
         // Derive pipeline status backwards.
-        mem_wb_stall = 0;
-        mem_wb_bubble = mem_wait_req;
+        mem_wb_stall = pause_global;
+        mem_wb_bubble = !mem_wb_stall && mem_wait_req;
 
         if(mem_wait_req) begin
             mem_wb_ip = mem_ip;
         end
-        alu_mem_stall = (!mem_take_ip) && mem_wait_req;
+
+        alu_mem_stall = (!mem_take_ip) && (mem_wb_stall || mem_wait_req);
         alu_mem_bubble = mem_take_ip || ((!alu_mem_stall) && alu_wait_req);
+        // XXX
+        alu_mem_stall = pause_global || alu_mem_stall;
+        alu_mem_bubble = alu_mem_bubble & ~pause_global;
 
         if(csr_take_ip) begin
             alu_mem_ip = csr_new_ip;
@@ -706,6 +894,10 @@ module cu_orchestra(
         id_alu_stall = (! (mem_take_ip || alu_take_ip)) && (alu_wait_req || (alu_mem_stall /*&& mem_instr != NOP*/) );
         id_alu_bubble = mem_take_ip || alu_take_ip || (!id_alu_stall && id_wait_req);
 
+        // XXX
+        id_alu_stall = id_alu_stall || pause_global;
+        id_alu_bubble = id_alu_bubble & ~pause_global;
+
         if(csr_take_ip) begin
             id_alu_ip = csr_new_ip;
         end else if(mem_flush_take_ip) begin
@@ -717,6 +909,10 @@ module cu_orchestra(
         if_id_stall = (! (mem_take_ip || alu_take_ip)) && (id_wait_req || (id_alu_stall /*&& alu_instr != NOP*/) );
         if_id_bubble = mem_take_ip || alu_take_ip || (!if_id_stall && if_wait_req);
 
+        // XXX
+        if_id_stall = if_id_stall || pause_global;
+        if_id_bubble = if_id_bubble & ~pause_global;
+
         if(csr_take_ip) begin
             if_id_ip = csr_new_ip;
         end else if(mem_flush_take_ip) begin
@@ -727,7 +923,204 @@ module cu_orchestra(
 
         pre_if_stall = (! (mem_take_ip || alu_take_ip)) && if_id_stall;
 
+        // XXX
+        pre_if_stall = pre_if_stall || pause_global;
+        if(if_mmu_error) begin
+            if_id_page_fault = if_page_fault;
+            if_id_no_exec_access = if_no_exec_access;
+            if_id_addr_misaligned = if_addr_misaligned;
+        end
     end
 
 endmodule
 
+module debug(
+    input wire [31:0] mstatus,
+    input wire [31:0] medeleg,
+    input wire [31:0] mideleg,
+    input wire [31:0] mie,
+    input wire [31:0] mtvec,
+    input wire [31:0] mscratch,
+    input wire [31:0] mepc,
+    input wire [31:0] mcause,
+    input wire [31:0] mtval,
+    input wire [31:0] mip,
+    input wire [31:0] stvec,
+    input wire [31:0] sscratch,
+    input wire [31:0] sepc,
+    input wire [31:0] scause,
+    input wire [31:0] stval,
+    input wire [31:0] satp,
+
+    input wire [31:0] if_ip,
+    input wire [31:0] if_instr,
+    input wire [31:0] id_ip,
+    input wire [31:0] id_instr,
+    input wire [31:0] ex_ip,
+    input wire [31:0] ex_instr,
+    input wire [31:0] mem_ip,
+    input wire [31:0] mem_instr,
+    input wire [31:0] wb_ip,
+    input wire [31:0] wb_instr,
+
+    input wire id_iaf,
+    input wire id_iam,
+    input wire id_ipf,
+    input wire ex_iaf,
+    input wire ex_iam,
+    input wire ex_ipf,
+    input wire mem_iaf,
+    input wire mem_iam,
+    input wire mem_ipf,
+    
+    input wire csr_exception,
+
+    input wire [31:0] mem_addr,
+    input wire [31:0] mem_pte,
+
+    input wire [31:0] dip_sw,
+    input wire [ 3:0] touch_btn,
+    output reg [15:0] leds,
+
+    input wire clock,
+    input wire reset,
+
+    input wire step,
+    output reg global_pause
+);
+    typedef enum logic [2:0] {
+        WAIT, NORMAL, PAUSE, NEXT
+    } debug_state_t;
+    debug_state_t state;
+    reg [31:0] breakpoint_addr;
+    always_ff @(posedge clock or posedge reset) begin
+        if(reset) begin
+            state <= WAIT;
+            breakpoint_addr <= 32'h8000_0000;
+        end else begin
+            case(state) 
+            WAIT: begin
+                if(step) begin
+                    state <= NORMAL;
+                    breakpoint_addr <= dip_sw;
+                end
+            end
+            NORMAL: begin
+                if(mem_ip == breakpoint_addr || csr_exception) begin
+                    state <= PAUSE;
+                end
+            end
+            PAUSE: begin
+                if(step) begin
+                    if(touch_btn == 4'b1111) begin
+                        state <= NORMAL;
+                        breakpoint_addr <= dip_sw;
+                    end else begin
+                        state <= NEXT;
+                    end
+                end
+            end
+            NEXT:begin
+                state <= PAUSE;
+            end
+            endcase
+        end
+    end
+
+    always_comb begin
+        global_pause = 0;
+        case(state) 
+        WAIT: begin
+            global_pause = 1;
+        end
+        NORMAL: begin
+            if(mem_ip == breakpoint_addr || csr_exception) begin
+                global_pause = 1;
+            end
+        end
+        PAUSE: begin
+            global_pause = 1;
+        end
+        
+        endcase
+        case(dip_sw) 
+        16'h0300: leds = mstatus[15:0];
+        16'h1300: leds = mstatus[31:16];
+        16'h0302: leds = medeleg[15:0];
+        16'h1302: leds = medeleg[31:16];
+        16'h0303: leds = mideleg[15:0];
+        16'h0304: leds = mie[15:0];
+        16'h0305: leds = mtvec[15:0];
+
+        16'h1303: leds = mideleg[31:16];
+        16'h1304: leds = mie[31:16];
+        16'h1305: leds = mtvec[31:16];
+
+        16'h0340: leds = mscratch[15:0];
+        16'h0341: leds = mepc[15:0];
+        16'h0342: leds = mcause[15:0];
+        16'h0343: leds = mtval[15:0];
+        16'h0344: leds = mip[15:0];
+
+        // sstatus shares with mstatus, however, mask it with bits that available for supervisor mode.
+        16'h0105: leds = stvec[15:0];
+        
+        12'h0140: leds = sscratch[15:0];
+        12'h0141: leds = sepc[15:0];
+        12'h0142: leds = scause[15:0];
+        12'h0143: leds = stval[15:0];
+        
+        12'h0180: leds = satp[15:0];
+
+        16'h1340: leds = mscratch[31:16];
+        16'h1341: leds = mepc[31:16];
+        16'h1342: leds = mcause[31:16];
+        16'h1343: leds = mtval[31:16];
+        16'h1344: leds = mip[31:16];
+
+        // sstatus shares with mstatus, however, mask it with bits that available for supervisor mode.
+        16'h1105: leds = stvec[31:16];
+        
+        16'h1140: leds = sscratch[31:16];
+        16'h1141: leds = sepc[31:16];
+        16'h1142: leds = scause[31:16];
+        16'h1143: leds = stval[31:16];
+        
+        16'h1180: leds = satp[31:16];
+
+        16'h2000: leds = if_ip[15:0]; // 8192
+        16'h2001: leds = id_ip[15:0];
+        16'h2002: leds = ex_ip[15:0];
+        16'h2003: leds = mem_ip[15:0];
+        16'h2004: leds = wb_ip[15:0];
+
+        16'h2005: leds = if_ip[31:16]; // 8197
+        16'h2006: leds = id_ip[31:16];
+        16'h2007: leds = ex_ip[31:16];
+        16'h2008: leds = mem_ip[31:16];
+        16'h2009: leds = wb_ip[31:16];
+
+        16'h200a: leds = if_instr[15:0]; // 8202
+        16'h200b: leds = id_instr[15:0];
+        16'h200c: leds = ex_instr[15:0];
+        16'h200d: leds = mem_instr[15:0];
+        16'h200e: leds = wb_instr[15:0];
+
+        16'h200f: leds = if_instr[31:16]; // 8207
+        16'h2010: leds = id_instr[31:16];
+        16'h2011: leds = ex_instr[31:16];
+        16'h2012: leds = mem_instr[31:16];
+        16'h2013: leds = wb_instr[31:16];
+
+        16'h2014: leds = {13'b0, id_iaf, id_iam, id_ipf}; // 8212
+        16'h2014: leds = {13'b0, ex_iaf, ex_iam, ex_ipf};
+        16'h2014: leds = {13'b0, mem_iaf, mem_iam, mem_ipf};
+        16'h2014: leds = mem_addr[15:0];
+        16'h2014: leds = mem_addr[31:16];
+        16'h2014: leds = mem_pte[15:0];
+        16'h2014: leds = mem_pte[31:16];
+        default: leds = 16'b0;
+
+        endcase
+    end 
+endmodule

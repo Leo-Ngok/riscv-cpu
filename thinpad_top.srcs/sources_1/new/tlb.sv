@@ -92,7 +92,7 @@ module tlb(
                         tlb_regs[rtlbi].way_arr[i_way].lru_priority - 1;
                     end
                 end
-                tlb_regs[rtlbi].way_arr[hit_way].lru_priority = {N_WAY_BW{1'b1}}; 
+                tlb_regs[rtlbi].way_arr[hit_way].lru_priority <= {N_WAY_BW{1'b1}}; 
             end
             if(invalidate) begin
                 for(int i_set = 0; i_set < SET_COUNT; ++i_set) begin

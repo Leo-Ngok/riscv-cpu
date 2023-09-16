@@ -147,6 +147,7 @@ module cache(
             flush_way_reg <= { N_WAY_BW {1'b0} };
             flush_way_tag <= { TAG_WIDTH {1'b0} };
             miss_addr_reg <= 32'b0;
+            fetch_way_idx_reg <= { N_WAY_BW {1'b0} };
         end else begin
                 case(state) 
                 WAIT: begin

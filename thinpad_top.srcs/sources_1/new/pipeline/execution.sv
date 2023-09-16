@@ -31,7 +31,7 @@ module mem_data_offset_adjust(
                 end
                 endcase
             end
-            3'b001: begin // SH, LH
+            3'b001: begin // SH, LH, we assert that [0] bit is always zero.
                 if(write_address[1] == 1'b0) begin
                     adjusted_data = { 16'b0, in_data[15:0] };
                     out_be = 4'b0011;
@@ -40,7 +40,7 @@ module mem_data_offset_adjust(
                     out_be = 4'b1100;
                 end
             end
-            3'b010: begin // SW, LW
+            3'b010: begin // SW, LW we assert that [1:0] bits are zeroes.
                 adjusted_data = in_data;
                 out_be = 4'b1111;
             end 
@@ -61,7 +61,7 @@ module mem_data_offset_adjust(
                 endcase
                 adjusted_data = 32'b0;
             end
-            3'b101: begin // LHU
+            3'b101: begin // LHU, we assert that [0] bit is always zero.
                 if(write_address[1] == 1'b0) begin
                     out_be = 4'b0011;
                 end else begin

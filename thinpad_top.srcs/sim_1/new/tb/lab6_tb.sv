@@ -38,21 +38,24 @@ module lab6_tb;
   wire uart_tsre;  // ????????
 
   // Windows ??????????????? "D:\\foo\\bar.bin"
-  // parameter BASE_RAM_INIT_FILE = "D:\\github\\THU_PASS\\Organization\\supervisor-rv\\kernel\\kernel.bin";//\\base_test_new.bin"; //"/tmp/main.bin";//"/tmp/main.bin"; // BaseRAM ??????????????????? "D:\\downloads\\kernel-rv32-int.bin";
+  //parameter BASE_RAM_INIT_FILE = "D:\\github\\THU_PASS\\Organization\\supervisor-rv\\kernel\\kernel.bin";//\\base_test_new.bin"; //"/tmp/main.bin";//"/tmp/main.bin"; // BaseRAM ??????????????????? "D:\\downloads\\kernel-rv32-int.bin";
   // parameter EXT_RAM_INIT_FILE = "/tmp/eram.bin";  // ExtRAM ?????????????????
   parameter BASE_RAM_INIT_FILE = "D:\\github\\ucore_os_lab\\labcodes_answer\\lab8\\bin\\rbl.img";
   parameter EXT_RAM_INIT_FILE = "D:\\github\\ucore_os_lab\\labcodes_answer\\lab3\\bin\\ucore.img";
   initial begin
     // ??????????????????
-    dip_sw = 32'h8000_1000;//2;
+    push_btn = 0;
+    #10000
+    dip_sw = 32'h8040_0008;//2;
     touch_btn = 0;
     reset_btn = 0;
+    push_btn = 1;
+    #1000
     push_btn = 0;
-
-    #100;
+    /*#100;
     reset_btn = 1;
     #100;
-    reset_btn = 0;
+    reset_btn = 0;*/
     #10000
     /* stage 1 test -- test for functionality of CU except IF
     dip_sw = 32'h0030_0693;
@@ -136,9 +139,9 @@ module lab6_tb;
     # 10000
     push_btn = 0;*/
     // stage 3: Check the whole
-    push_btn = 1;
+    //push_btn = 1;
     # 10000
-    push_btn = 0;
+    //push_btn = 0;
     # 3500000
 //     // Write the following program.
 //     // li a0, 114514

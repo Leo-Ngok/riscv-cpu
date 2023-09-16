@@ -142,7 +142,7 @@ module stage_6_top (
   wire        i_cache_re;
   wire [31:0] i_cache_addr;
   wire [31:0] i_cache_data;
-  wire [31:0] i_cache_ack;
+  wire        i_cache_ack;
 
   wire        d_cache_bypass;
   wire        d_cache_we;
@@ -303,7 +303,7 @@ module stage_6_top (
     .PUSH_I(push_btn), 
     .PULSE_OUT(step)
   );
-
+  wire [31:0] debug_ip;
   cu_pipeline control_unit(
     .clk(sys_clk),
     .rst(sys_rst),
@@ -344,7 +344,11 @@ module stage_6_top (
 
     .step(step),
     .dip_sw(dip_sw),
-    .curr_ip_out(leds),
+    .touch_btn(touch_btn),
+    .dpy0(dpy0),
+    .dpy1(dpy1),
+    .leds(leds),
+    //.curr_ip_out(debug_ip),
 
     .local_intr(local_intr),
     .mtime(dau.clint.mtime)
